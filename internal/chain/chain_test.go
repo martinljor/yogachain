@@ -18,8 +18,8 @@ func TestInventoryDemo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inventario demo: %v", err)
 	}
-	if len(inv.Jobs) != 8 || len(inv.Repos) != 5 || len(inv.VMs) != 14 {
-		t.Fatalf("inventario: jobs=%d repos=%d vms=%d (esperado 8/5/14)", len(inv.Jobs), len(inv.Repos), len(inv.VMs))
+	if len(inv.Jobs) != 9 || len(inv.Repos) != 5 || len(inv.VMs) != 15 {
+		t.Fatalf("inventario: jobs=%d repos=%d vms=%d (esperado 9/5/15)", len(inv.Jobs), len(inv.Repos), len(inv.VMs))
 	}
 	j := inv.Job("j7")
 	if j == nil || j.Kind != "Backup" || j.Type != "VSphereBackup" || j.Comp != "DedupFriendly" || j.GFS != "W4 / M12 / Y1" {
@@ -115,6 +115,38 @@ func TestRestorePointsAndDetail(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+func TestPluginBackupFromFiles(t *testing.T) {
+	ctx := context.Background()
+	s := demoSession()
+	inv, err := LoadInventory(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j := inv.Job("j-plug")
+	if j == nil || !j.FromBackup || j.Kind != "Application backup" || len(j.VMIDs) != 1 {
+		t.Fatalf("job de plug-in sintetizado mal: %+v", j)
+	}
+	rps, err := RestorePoints(ctx, s, inv, "job", "j-plug", time.Now().AddDate(0, 0, -7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rps) < 14 || len(rps) > 16 {
+		t.Fatalf("esperaba ~16 piezas en 7 dias, got %d", len(rps))
+	}
+	for _, r := range rps {
+		if !r.FromFile || r.Type != "file" || r.VMID != "bo-plug" || r.CompressRatio < 2.6 || r.CompressRatio > 2.8 || r.SizeGB <= 0 {
+			t.Fatalf("pieza mal mapeada: %+v", r)
+		}
+	}
+	d, err := LoadDetail(ctx, s, inv, rps[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Chain) != 42 || d.RP.ID != rps[0].ID {
+		t.Fatalf("detalle de pieza: chain=%d rp=%s", len(d.Chain), d.RP.ID)
 	}
 }
 

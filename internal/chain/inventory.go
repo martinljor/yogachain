@@ -296,6 +296,20 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 			inv.objectBackup[str(o, "id")] = bid
 			link(w, inv.backupJob[bid])
 		}
+		if len(objs) == 0 {
+			// FIELD (vbrdb-01, agent Oracle RMAN): /backups/{id}/objects vacio aunque el
+			// backup tiene restore points. Los archivos si traen objectIds: linkeamos por ahi.
+			if bfs, err := getAll(ctx, s, "v1/backups/"+bid+"/backupFiles", 0); err == nil {
+				for _, bf := range bfs {
+					for _, oid := range strs(bf, "objectIds") {
+						if key := inv.objectVM[oid]; key != "" {
+							inv.objectBackup[oid] = bid
+							link(byKey[key], inv.backupJob[bid])
+						}
+					}
+				}
+			}
+		}
 	}
 	// fallback: objetos cuyo backupId si esta en /backups
 	for _, w := range byKey {

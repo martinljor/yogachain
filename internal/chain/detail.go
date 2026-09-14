@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"yogachain/internal/vbr"
@@ -24,6 +25,9 @@ type Needed struct {
 
 // LoadDetail arma el detalle de un RP: resultado AAIP, cadena y ubicaciones.
 func LoadDetail(ctx context.Context, s *vbr.Session, inv *Inventory, rpID string) (*Detail, error) {
+	if strings.HasPrefix(rpID, "bf:") {
+		return fileDetail(ctx, s, inv, strings.TrimPrefix(rpID, "bf:"))
+	}
 	rp, err := GetRestorePoint(ctx, s, inv, rpID)
 	if err != nil {
 		return nil, err
@@ -85,4 +89,36 @@ func LoadDetail(ctx context.Context, s *vbr.Session, inv *Inventory, rpID string
 		}
 	}
 	return d, nil
+}
+
+// fileDetail: detalle de un punto sintetizado desde un BackupFileModel (plug-in).
+// La "cadena" son todos los archivos del mismo backup; sin AAIP ni ubicaciones.
+func fileDetail(ctx context.Context, s *vbr.Session, inv *Inventory, fileID string) (*Detail, error) {
+	for bid := range inv.backupJob {
+		bfs, err := getAll(ctx, s, "v1/backups/"+bid+"/backupFiles", 0)
+		if err != nil {
+			continue
+		}
+		var chain []RestorePoint
+		var me *RestorePoint
+		for _, bf := range bfs {
+			rp := fileRP(inv, bid, bf, nil)
+			chain = append(chain, rp)
+			if str(bf, "id") == fileID {
+				me = &chain[len(chain)-1]
+			}
+		}
+		if me == nil {
+			continue
+		}
+		sort.Slice(chain, func(a, b int) bool { return chain[a].Date < chain[b].Date })
+		for i := range chain {
+			if chain[i].ID == "bf:"+fileID {
+				me = &chain[i]
+			}
+		}
+		me.AaipDetail = "Plug-in backup: VBR exposes backup files, not restore points, over REST. Full/incremental/log pieces are known to the application catalog (RMAN, backint), not to the API."
+		return &Detail{RP: *me, Chain: chain, Needed: Needed{Files: 1, SizeGB: me.SizeGB}}, nil
+	}
+	return nil, &vbr.APIError{Status: 404, Message: "Backup file not found"}
 }

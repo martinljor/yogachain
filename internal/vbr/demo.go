@@ -278,7 +278,17 @@ func demoResponse(path string) json.RawMessage {
 		for _, j := range demoJobs {
 			out = append(out, demoBackup(j))
 		}
+		// FIELD: backup de plug-in standalone (Oracle RMAN configurado en el servidor):
+		// jobType Unknown, CustomPlatform, sin job en /jobs ni /jobs/states.
+		out = append(out, map[string]any{"id": "bk-plug", "name": "oraclect Oracle backup (REPO-HARDENED-01)", "jobId": "j-plug", "repositoryId": "r1",
+			"repositoryName": "REPO-HARDENED-01", "platformName": "CustomPlatform", "jobType": "Unknown", "creationTime": "0001-01-01T00:00:00"})
 		return demoPage(out, qs)
+	case p == "v1/backups/bk-plug/objects":
+		return demoPage([]map[string]any{demoPluginObject()}, qs)
+	case p == "v1/backups/bk-plug/backupFiles":
+		return demoPage(demoFilterCreated(demoPluginFiles(), qs), qs)
+	case p == "v1/backupObjects/bo-plug/restorePoints":
+		return demoPage(nil, qs)
 	case len(parts) == 2 && parts[0] == "backups":
 		if j, ok := demoJobByBackup(parts[1]); ok {
 			return demoJSON(demoBackup(j))
@@ -306,6 +316,7 @@ func demoResponse(path string) json.RawMessage {
 				out = append(out, demoObject(j, vid))
 			}
 		}
+		out = append(out, demoPluginObject())
 		return demoPage(out, qs)
 	case len(parts) == 3 && parts[0] == "backupObjects" && parts[2] == "restorePoints":
 		out := []map[string]any{}
@@ -521,4 +532,30 @@ func demoPage(items []map[string]any, qs url.Values) json.RawMessage {
 func demoJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+// demoPluginObject / demoPluginFiles: forma real de un backup de plug-in Oracle RMAN
+// (FIELD vbrdb-01): objeto type Directory sin restore points, archivos .vab con
+// tamanos y ratios, objectIds vacio.
+func demoPluginObject() map[string]any {
+	return map[string]any{"id": "bo-plug", "backupId": "bk-plug", "name": "oraclect", "type": "Directory", "platformName": "CustomPlatform",
+		"platformId": "dc839fc9-0000-0000-0000-000000000000", "restorePointsCount": 0, "size": 0, "lastRunFailed": false}
+}
+
+func demoPluginFiles() []map[string]any {
+	demoOnce.Do(demoBuild)
+	var out []map[string]any
+	today := time.Now().Truncate(24 * time.Hour)
+	gb := 1024.0 * 1024 * 1024
+	for d := 20; d >= 0; d-- {
+		for piece := 0; piece < 2; piece++ { // dos canales RMAN por corrida
+			at := today.AddDate(0, 0, -d).Add(21*time.Hour + time.Duration(piece*3)*time.Minute)
+			data := 3.1 + float64(piece)*0.8
+			out = append(out, map[string]any{"id": fmt.Sprintf("vab-%02d-%d", d, piece), "backupId": "bk-plug", "objectIds": []string{}, "restorePointIds": []string{},
+				"name": fmt.Sprintf("P:\\Backups\\oraclect Oracle backup (REPO-HARDENED-01)\\%08x-%d.vab", d*7919, piece),
+				"dataSize": int64(data * gb), "backupSize": int64(data * 0.37 * gb), "compressRatio": 37, "dedupRatio": 100,
+				"creationTime": at.Format(time.RFC3339), "gfsPeriods": []string{"None"}, "severity": "Clean"})
+		}
+	}
+	return out
 }

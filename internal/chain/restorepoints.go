@@ -122,8 +122,132 @@ func RestorePoints(ctx context.Context, s *vbr.Session, inv *Inventory, pivot, i
 			out = append(out, rp)
 		}
 	}
+	// 4) FIELD (vbrdb-01): los backups de plug-in (Oracle RMAN, SAP HANA/backint, SQL
+	//    plug-in, MongoDB; platformName CustomPlatform) no publican restore points
+	//    por REST: el objeto es type Directory con restorePointsCount 0 y
+	//    /backupObjects/{id}/restorePoints viene vacio. Lo que si hay son los
+	//    archivos (.vab, un backup piece por canal) en /backups/{id}/backupFiles,
+	//    con fecha, tamanos y ratios. Para esos backups sintetizamos un punto por
+	//    archivo, asi la cadena se puede explorar igual.
+	for _, bid := range scopeBackups(inv, pivot, id, objectIDs) {
+		if seenBackup[bid] {
+			continue // ya tuvo restore points reales
+		}
+		seenBackup[bid] = true
+		bfs, err := getAll(ctx, s, "v1/backups/"+bid+"/backupFiles", 0)
+		if err != nil {
+			log.Printf("restorePoints: backupFiles of %s failed: %v", bid, err)
+			continue
+		}
+		for _, bf := range bfs {
+			rp := fileRP(inv, bid, bf, objectIDs)
+			if !keep(rp) || seenRP[rp.ID] {
+				continue
+			}
+			seenRP[rp.ID] = true
+			out = append(out, rp)
+		}
+	}
+	// los puntos por archivo no pasaron por createdAfterFilter: recortamos aca
+	filtered := out[:0]
+	for _, r := range out {
+		if r.FromFile {
+			if t, err := time.Parse(time.RFC3339, r.Date); err == nil && t.Before(since) {
+				continue
+			}
+		}
+		filtered = append(filtered, r)
+	}
+	out = filtered
 	sort.Slice(out, func(a, b int) bool { return out[a].Date < out[b].Date })
 	return out, nil
+}
+
+// scopeBackups: backups que cubre el pivot (para el fallback por archivos).
+func scopeBackups(inv *Inventory, pivot, id string, objectIDs []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(b string) {
+		if b != "" && !seen[b] {
+			seen[b] = true
+			out = append(out, b)
+		}
+	}
+	switch pivot {
+	case "job":
+		if j := inv.Job(id); j != nil {
+			for _, b := range j.BackupIDs {
+				add(b)
+			}
+		}
+	case "repo":
+		for b, r := range inv.backupRepo {
+			if r == id {
+				add(b)
+			}
+		}
+	default:
+		for _, oid := range objectIDs {
+			add(inv.objectBackup[oid])
+		}
+	}
+	return out
+}
+
+// fileRP: un BackupFileModel como punto de la linea de tiempo. El workload es el
+// objeto del archivo (objectIds) o, si viene vacio (plug-ins), el objeto del backup.
+func fileRP(inv *Inventory, bid string, bf obj, objectIDs []string) RestorePoint {
+	vmID := ""
+	for _, oid := range strs(bf, "objectIds") {
+		if v := inv.objectVM[oid]; v != "" {
+			vmID = v
+			break
+		}
+	}
+	if vmID == "" {
+		for oid, b := range inv.objectBackup {
+			if b == bid {
+				if v := inv.objectVM[oid]; v != "" {
+					vmID = v
+					break
+				}
+			}
+		}
+	}
+	if vmID == "" && len(objectIDs) == 1 {
+		vmID = inv.objectVM[objectIDs[0]]
+	}
+	jobID := inv.backupJob[bid]
+	rtype := "file"
+	if inv.backupPlatform[bid] == "Tape" {
+		rtype = "tape"
+	}
+	mal := str(bf, "severity")
+	if mal == "" || mal == "Informative" {
+		mal = "Clean"
+	}
+	gfs := ""
+	for _, p := range strs(bf, "gfsPeriods") {
+		if p != "" && p != "None" {
+			gfs = p
+			break
+		}
+	}
+	created := str(bf, "creationTime")
+	imm := ""
+	if r := inv.Repo(inv.backupRepo[bid]); r != nil && r.ImmDays > 0 {
+		if t, err := time.Parse(time.RFC3339, created); err == nil {
+			imm = t.AddDate(0, 0, r.ImmDays).Format(time.RFC3339)
+		}
+	}
+	return RestorePoint{
+		ID: "bf:" + str(bf, "id"), JobID: jobID, VMID: vmID, RepoID: inv.backupRepo[bid], BackupID: bid,
+		BackupFileID: str(bf, "id"), Date: created, Type: rtype, Full: isFullFile(str(bf, "name")), GFS: gfs,
+		SizeGB: toGB(bf, "backupSize"), DataSize: toGB(bf, "dataSize"),
+		CompressRatio: ratio(num(bf, "compressRatio")), DedupRatio: ratio(num(bf, "dedupRatio")),
+		ImmUntil: imm, Mal: mal, File: strings.TrimSpace(str(bf, "name")), Platform: inv.backupPlatform[bid],
+		AllowedOperations: nil, FromFile: true,
+	}
 }
 
 // RestorePoint trae un RP puntual (para el detalle), con su BackupFile.

@@ -88,6 +88,7 @@ type RestorePoint struct {
 	SessionID         string   `json:"-"`
 	Aaip              string   `json:"aaip,omitempty"` // ok | warn | fail | off
 	AaipDetail        string   `json:"aaipDetail,omitempty"`
+	FromFile          bool     `json:"fromFile,omitempty"` // punto sintetizado desde BackupFileModel (plug-ins: sin restore points por REST)
 }
 
 type Inventory struct {

@@ -43,6 +43,19 @@ Header obligatorio: `x-api-version: 1.3-rev2`. Login: `POST /api/oauth2/token` (
 - **FIELD (vbrdb-01):** `GET /jobs` → 500 `Source item ... is not part of 'Clusters' hierarchy` cuando hay jobs de aplicación (plug-ins RMAN/HANA/MongoDB/SQL). `/jobs/states` no expande objetos y sí los lista (tipo `Unknown`).
 - **FIELD (cdp):** un VBR solo con políticas CDP devuelve 0 jobs y 0 backups: CDP y réplicas van por `/replicas` y `/cdp` (fase 3).
 
+## Backups de plug-in (FIELD vbrdb-01)
+
+| Qué | Cómo lo expone la REST API |
+|---|---|
+| Backup | `/backups`: `platformName: CustomPlatform`, `jobType: Unknown`, `name: "<host> <App> backup (<repo>)"`, `creationTime: 0001-01-01`. No está en `/jobs` ni `/jobs/states`. |
+| Objeto | `/backupObjects` y `/backups/{id}/objects`: `type: Directory`, `restorePointsCount: 0`, `size: 0`, sin `objectId`. |
+| Restore points | `/backupObjects/{id}/restorePoints` → **vacío**. |
+| Archivos | `/backups/{id}/backupFiles`: un `.vab` por backup piece/canal, con `creationTime`, `dataSize`, `backupSize`, `compressRatio`, `dedupRatio`, `objectIds: []`. |
+| Sesiones | pendiente de validar (`/sessions?jobIdFilter=`); el diagnóstico las muestrea. |
+| Modelo YogaChain | `RestorePoint{FromFile: true, Type: "file", ID: "bf:<fileId>"}` por archivo; detalle con la cadena = todos los archivos del backup. |
+
+Consecuencia para la fase 2 (Oracle): la REST API no distingue full / incremental / archive log en un backup de plug-in. Para eso hace falta el catálogo RMAN (`LIST BACKUP` en el servidor) o los logs del plug-in; la tool puede mostrar cadencia, tamaño y eficiencia por pieza, pero no point-in-time.
+
 ## Implementación
 
 El mapeo vive en `internal/chain/` (Go): `inventory.go` (jobs, workloads, repos), `restorepoints.go` (RP + backupFiles), `aaip.go` (guest processing desde logs), `detail.go` (cadena + ubicaciones). `internal/vbr/demo.go` responde estos mismos endpoints con JSON simulado para desarrollo y tests.

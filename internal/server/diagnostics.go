@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"runtime"
+	"strconv"
 	"time"
 
 	"yogachain/internal/chain"
@@ -100,9 +101,41 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// FIELD (vbrdb-01): los backups de plug-in (CustomPlatform) no publican restore
+	// points; muestreamos hasta 3 para ver que SI exponen (archivos, objetos, sesiones).
+	if inv != nil {
+		n := 0
+		for _, j := range inv.Jobs {
+			if j.Kind != "Application backup" || len(j.BackupIDs) == 0 || n >= 3 {
+				continue
+			}
+			n++
+			bid := j.BackupIDs[0]
+			key := "plugin_" + strconv.Itoa(n) + "_"
+			samples[key+"job"] = map[string]any{"name": j.Name, "type": j.Type, "backupId": bid, "fromBackup": j.FromBackup, "detailError": j.DetailError}
+			sample(key+"objects", "v1/backups/"+bid+"/objects?skip=0&limit=5")
+			sample(key+"backupFiles", "v1/backups/"+bid+"/backupFiles?skip=0&limit=5")
+			sample(key+"sessions", "v1/sessions?jobIdFilter="+bid+"&skip=0&limit=3")
+			for _, v := range inv.VMs {
+				if contains(v.JobIDs, j.ID) && len(v.ObjectIDs) > 0 {
+					sample(key+"restorePoints", "v1/backupObjects/"+v.ObjectIDs[0]+"/restorePoints?skip=0&limit=3")
+					break
+				}
+			}
+		}
+	}
 	out["samples"] = samples
 	out["rest_trace"] = sess.Trace()
 
 	w.Header().Set("Content-Disposition", "attachment; filename=yogachain-diagnostics-"+time.Now().Format("20060102-150405")+".json")
 	writeJSON(w, http.StatusOK, out)
+}
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
 }
