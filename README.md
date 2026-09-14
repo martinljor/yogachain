@@ -105,3 +105,25 @@ yogachain/
 - Backups del **plug-in RMAN / SAP HANA / SQL plug-in**: no aparecen como RP de VM (`platformName = ApplicationBackupRepository`). Afecta la fase 2.
 - Certificado self-signed: `verify_ssl=false` por defecto. CORS abierto (el frontend se sirve del mismo origen).
 - `aaip=1` contra un VBR real: 2–3 llamadas por RP → cachear por `sessionId`.
+
+## Release
+
+El release lo arma GitHub Actions al empujar un tag `vX.Y.Z[-alpha]` (`.github/workflows/release.yml`):
+corre los tests, verifica que `const version` en `main.go` coincida con el tag, ejecuta `build.sh` y
+publica los binarios + `SHA256SUMS.txt` como pre-release si el tag contiene `alpha`/`beta`.
+
+```bash
+# bump: editar const version en main.go, commit, y
+git tag -a v0.1.1-alpha -m "v0.1.1-alpha" && git push origin main --tags
+```
+
+## Diagnóstico en alpha
+
+Cuando algo no se vea bien contra un VBR real, mandá dos cosas:
+
+1. Botón **Diagnóstico** en la barra superior → descarga `yogachain-diagnostics-<fecha>.json`: versión, SO,
+   sesión (sin credenciales ni tokens), resumen del inventario, 1–2 ítems crudos de cada colección de la
+   REST API (para comparar el schema real con lo asumido en `// LAB`) y la traza de las últimas 300
+   llamadas REST con status, ms, bytes y error.
+2. `yogachain.log` (al lado del binario). Con `-debug` (default) incluye cada GET, el paginado y el primer
+   ítem crudo de cada colección. Nunca contiene passwords ni tokens.
