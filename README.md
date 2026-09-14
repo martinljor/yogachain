@@ -1,129 +1,130 @@
 # Yoga Chain for Veeam
 
 > [!CAUTION]
-> # 🚧 FASE ALPHA — PROTOTIPO EXPERIMENTAL 🚧
-> **Este proyecto está en fase *alpha*. NO es apto para producción.**
-> - Es un prototipo en desarrollo activo: interfaces, endpoints y comportamiento **pueden cambiar o romperse** sin aviso.
-> - **Solo lectura** contra la REST API de VBR: no crea, modifica ni borra nada.
-> - **Sin autenticación** en la consola y **credenciales en memoria** — por defecto escucha solo en `127.0.0.1`. No lo expongas en una red no confiable.
-> - No es un producto de Veeam ni tiene soporte oficial. **Uso bajo tu propia responsabilidad.**
+> # 🚧 ALPHA — EXPERIMENTAL PROTOTYPE 🚧
+> **This project is in *alpha*. It is NOT production-ready.**
+> - It is a prototype under active development: interfaces, endpoints and behavior **may change or break** without notice.
+> - **Read-only** against the VBR REST API: it never creates, modifies or deletes anything.
+> - **No authentication** on the console and **credentials kept in memory** — it listens on `127.0.0.1` by default. Do not expose it on an untrusted network.
+> - Not a Veeam product, no official support. **Use at your own risk.**
 
 *for VBR to know how are your chains made.*
 
-Herramienta para que el administrador de backup entienda **qué restore points tiene, de qué
-tipo y en dónde**, leyendo la REST API de Veeam Backup & Replication (v12.3 / v13). Un solo
-binario (Windows, Linux, macOS) que sirve la consola web y la API en el mismo puerto: el
-usuario lo ejecuta en su laptop/workstation y se abre el navegador. Sin agentes, sin acceso
-a la base de datos de VBR, sin instalar nada.
+A tool for the backup administrator to understand **which restore points exist, of what type
+and where**, reading the Veeam Backup & Replication REST API (v12.3 / v13). A single binary
+(Windows, Linux, macOS) that serves the web console and the API on the same port: run it on
+your laptop/workstation and the browser opens. No agents, no access to the VBR database,
+nothing to install.
 
-Complementa a Veeam ONE, que muestra agregados (cantidad de RP, RPO) y reportes estáticos:
-acá la cadena se explora de forma interactiva desde tres pivots — **Job**, **Workload** y
-**Repositorio** — con una línea de tiempo por carril. Hermano de
-[Yoga Benchmark](https://github.com/martinljor/yogabench): misma arquitectura, mismo estilo.
+It complements Veeam ONE, which shows aggregates (restore point counts, RPO) and static
+reports: here the chain is explored interactively from three pivots — **Job**, **Workload**
+and **Repository** — on a per-lane timeline. Sibling of
+[Yoga Benchmark](https://github.com/martinljor/yogabench): same architecture, same style.
 
-## Qué muestra
+## What it shows
 
-| Vista | Qué responde |
+| View | What it answers |
 |---|---|
-| **Tipo** | Full activo / sintético / incremental / GFS / copia / tape, huecos vs. RPO, malware, inmutabilidad |
-| **Eficiencia** | Reducción total por RP (ámbar → verde), `compressRatio` y `dedupRatio` de `backupFiles`, datos origen vs. en disco |
-| **Aplicación** | Consistencia de aplicación por RP (derivada de los logs de la task session), cadencia de log backups (SQL / Oracle / PostgreSQL) y qué opciones de restore habilita cada RP |
+| **Type** | Active full / synthetic full / incremental / GFS / copy / tape, gaps vs. RPO, malware, immutability |
+| **Efficiency** | Total reduction per restore point (amber → green), `compressRatio` and `dedupRatio` from `backupFiles`, source data vs. on-disk size |
+| **Application** | Application consistency per restore point (derived from the task session logs), log backup cadence (SQL / Oracle / PostgreSQL) and which restore options each point enables |
 
-Panel de detalle por RP: archivo, cadena y cuántos archivos hay que leer para restaurarlo,
-dónde más existe ese dato (copia S3, tape), configuración `appAwareProcessing` del job
-(`vss`, `sql.logsProcessing`, `oracle.archiveLogs`, …) y `allowedOperations`.
+Detail panel per restore point: backup file, chain and how many files a restore has to read,
+where else the same data exists (S3 copy, tape), the job's `appAwareProcessing` settings
+(`vss`, `sql.logsProcessing`, `oracle.archiveLogs`, …) and `allowedOperations`.
 
-## Fases
+## Phases
 
-1. **VMs, solo lectura, un VBR** ← esta
-2. Bases de datos (Oracle, SQL) en profundidad; llamar al menú de restore (Instant Recovery / FLR vía REST; Explorers desde consola)
-3. Resto de workloads (agentes, NAS, cloud). Unificar UI con Yoga Benchmark.
+1. **VMs, read-only, one VBR** ← this one
+2. Databases (Oracle, SQL) in depth; call the restore menu (Instant Recovery / FLR via REST; Explorers from the console)
+3. Remaining workloads (agents, NAS, cloud). Unify the UI with Yoga Benchmark.
 
-## Uso (usuario final)
+## Usage (end user)
 
-1. Descargar el binario de tu SO desde *Releases* (`yogachain-windows-amd64-vX.Y.Z.zip`, `yogachain-linux-amd64-vX.Y.Z`, `yogachain-darwin-arm64-vX.Y.Z`). Verificar con `SHA256SUMS.txt`.
-2. Ejecutarlo. Se abre `http://localhost:8001` en el navegador (Yoga Benchmark usa el 8000, pueden convivir).
-3. **Conectar** a un VBR con un usuario con rol **Backup Viewer** (alcanza para todo lo de la fase 1), o **Demo** para ver la consola sin VBR.
+1. Download the binary for your OS from *Releases* (`yogachain-windows-amd64-vX.Y.Z.zip`, `yogachain-linux-amd64-vX.Y.Z`, `yogachain-darwin-arm64-vX.Y.Z`). Verify with `SHA256SUMS.txt`.
+2. Run it. `http://localhost:8001` opens in the browser (Yoga Benchmark uses 8000; both can run side by side).
+3. **Connect** to a VBR with a user in the **Backup Viewer** role (enough for everything in phase 1), or **Demo** to see the console without a VBR.
 
-Flags: `-port 8001`, `-bind 127.0.0.1` (solo cambiar en un lab aislado), `-no-browser`, `-log yogachain.log` (vacío = solo consola), `-debug` (default true; nunca loguea passwords ni tokens).
+Flags: `-port 8001`, `-bind 127.0.0.1` (change only in an isolated lab), `-no-browser`, `-log yogachain.log` (empty = console only), `-debug` (default true; never logs passwords or tokens).
 
-Windows: si el navegador bloquea el `.exe` suelto, usar el `.zip`. En Linux/macOS: `chmod +x`.
+Windows: if the browser blocks the bare `.exe`, use the `.zip`. Linux/macOS: `chmod +x`.
 
-## Desarrollo
+## Development
 
-Requiere Go 1.26+ **solo para compilar**.
+Requires Go 1.26+ **only to build**.
 
 ```bash
-./run.sh                 # go run . (abre el navegador)
-go test ./...            # tests contra la sesion demo (mismo mapeo que en prod)
-./build.sh               # binarios en dist/ para linux/windows/macos + zip + SHA256SUMS
+./run.sh                 # go run . (opens the browser)
+go test ./...            # tests against the demo session (same mapping code as production)
+./build.sh               # binaries in dist/ for linux/windows/macos + zip + SHA256SUMS
 ```
 
-Fuente **Open Sans**: copiar `frontend/opensans.woff2` desde yogabench antes de compilar (se embebe en
-el binario). Si falta, la consola cae a la fuente del sistema.
+**Open Sans** font: copy `frontend/opensans.woff2` from yogabench before building (it is embedded
+in the binary). If missing, the console falls back to the system font.
 
-## Estructura
+## Layout
 
 ```
 yogachain/
-├── main.go                 # flags, banner, abre el navegador, ListenAndServe
+├── main.go                 # flags, banner, opens the browser, ListenAndServe
 ├── web.go                  # //go:embed frontend
 ├── build.sh                # cross-compile linux/windows/macos -> dist/
 ├── frontend/
-│   └── index.html          # consola web: un solo archivo, sin frameworks ni CDN, i18n es/en/pt
+│   └── index.html          # web console: single file, no frameworks or CDN, i18n en/es/pt
 ├── internal/
-│   ├── dbg/                # logging de depuracion gateado por --debug
-│   ├── vbr/                # sesiones, cliente REST (OAuth2 + refresh, cache, single-flight), demo
-│   ├── chain/              # REST de VBR -> modelo normalizado: inventario, restore points,
-│   │                       #   cadena/ubicaciones, application-aware (+ tests)
-│   └── server/             # mux + handlers; sirve el frontend embebido
-└── docs/API-MAPPING.md     # endpoint -> campo, con las limitaciones encontradas en la API
+│   ├── dbg/                # debug logging gated by --debug
+│   ├── vbr/                # sessions, REST client (OAuth2 + refresh, cache, single-flight), demo, REST trace
+│   ├── chain/              # VBR REST -> normalized model: inventory, restore points,
+│   │                       #   chain/locations, application-aware (+ tests)
+│   └── server/             # mux + handlers; serves the embedded frontend; diagnostics bundle
+└── docs/API-MAPPING.md     # endpoint -> field, with the API limitations found
 ```
 
-## API del backend
+## Backend API
 
-| Método | Ruta | Descripción |
+| Method | Route | Description |
 |---|---|---|
 | GET | `/health` | `{ok, active_sessions, version}` |
-| POST | `/api/connect` | `{host, port, username, password, api_version, verify_ssl}` → `{session_id, expires_in, api_version}`. `api_version: "auto"` negocia 1.3-rev2 → 1.3-rev1 → 1.3-rev0 → 1.2-rev1 |
-| POST | `/api/connect-demo` | sesión con datos simulados (JSON con la forma real de VBR) |
-| POST | `/api/{session}/disconnect` | cierra la sesión |
-| GET | `/api/{session}/inventory` | jobs (storage, GFS, guest processing), workloads, repositorios |
-| POST | `/api/{session}/inventory/refresh` | descarta el inventario cacheado y lo recarga |
-| GET | `/api/{session}/restore-points?pivot=job\|vm\|repo&id=…&days=30&skip=0&limit=100[&aaip=1]` | RPs normalizados, paginados de a 100 |
-| GET | `/api/{session}/restore-points/{rp}` | detalle: RP + resultado AAIP + cadena + otras ubicaciones |
-| GET | `/api/{session}/raw/{path...}` | passthrough de lectura a la REST API (ej. `raw/v1/backups`) para inspeccionar el schema real |
+| POST | `/api/connect` | `{host, port, username, password, api_version, verify_ssl}` → `{session_id, expires_in, api_version}`. `api_version: "auto"` negotiates 1.3-rev2 → 1.3-rev1 → 1.3-rev0 → 1.2-rev1 |
+| POST | `/api/connect-demo` | session with simulated data (JSON in the real VBR shape) |
+| POST | `/api/{session}/disconnect` | closes the session |
+| GET | `/api/{session}/inventory` | jobs (storage, GFS, guest processing), workloads, repositories |
+| POST | `/api/{session}/inventory/refresh` | drops the cached inventory and reloads it |
+| GET | `/api/{session}/restore-points?pivot=job\|vm\|repo&id=…&days=30&skip=0&limit=100[&aaip=1]` | normalized restore points, paged by 100 |
+| GET | `/api/{session}/restore-points/{rp}` | detail: restore point + AAIP result + chain + other locations |
+| GET | `/api/{session}/raw/{path...}` | read-only passthrough to the REST API (e.g. `raw/v1/backups`) to inspect the real schema |
+| GET | `/api/{session}/diagnostics` | alpha diagnostics bundle (see below) |
 
-## Pendientes / a validar en lab (`// LAB` en el código)
+## Pending / to validate in a lab (`// LAB` in the code)
 
-- Identidad del workload entre backups (primario, copia, tape): hoy `BackupObjectModel.objectId`, fallback nombre.
-- Full **sintético vs. activo**: la API da `Increment|Full`; `taskSession.algorithm = Synthetic` se consulta solo en el detalle.
-- Escala de `dedupRatio` / `compressRatio` (factor vs. porcentaje) en `BackupFileModel`.
-- Inmutabilidad por RP: no viene en el RP; se deriva de `creationTime + repo.immDays` (hardened / object lock).
-- Patrones de texto en `/taskSessions/{id}/logs` para clasificar guest processing (VSS, Oracle, SQL, PostgreSQL).
-- `EJobType` reales para backup copy / tape / agentes; `backupRepositoryId` en jobs de copia.
-- Backups del **plug-in RMAN / SAP HANA / SQL plug-in**: no aparecen como RP de VM (`platformName = ApplicationBackupRepository`). Afecta la fase 2.
-- Certificado self-signed: `verify_ssl=false` por defecto. CORS abierto (el frontend se sirve del mismo origen).
-- `aaip=1` contra un VBR real: 2–3 llamadas por RP → cachear por `sessionId`.
+- Workload identity across backups (primary, copy, tape): currently `BackupObjectModel.objectId`, falling back to the name.
+- **Synthetic vs. active full**: the API returns `Increment|Full`; `taskSession.algorithm = Synthetic` is queried only in the detail view.
+- Scale of `dedupRatio` / `compressRatio` (factor vs. percentage) in `BackupFileModel`.
+- Immutability per restore point: not in the RP; derived from `creationTime + repo.immDays` (hardened / object lock).
+- Text patterns in `/taskSessions/{id}/logs` to classify guest processing (VSS, Oracle, SQL, PostgreSQL).
+- Real `EJobType` values for backup copy / tape / agents; `backupRepositoryId` on copy jobs.
+- **RMAN / SAP HANA / SQL plug-in** backups: they do not show up as VM restore points (`platformName = ApplicationBackupRepository`). Affects phase 2.
+- Self-signed certificate: `verify_ssl=false` by default. CORS open (the frontend is served from the same origin).
+- `aaip=1` against a real VBR: 2–3 calls per restore point → cache by `sessionId`.
 
 ## Release
 
-El release lo arma GitHub Actions al empujar un tag `vX.Y.Z[-alpha]` (`.github/workflows/release.yml`):
-corre los tests, verifica que `const version` en `main.go` coincida con el tag, ejecuta `build.sh` y
-publica los binarios + `SHA256SUMS.txt` como pre-release si el tag contiene `alpha`/`beta`.
+GitHub Actions builds the release when a `vX.Y.Z[-alpha]` tag is pushed (`.github/workflows/release.yml`):
+it runs the tests, checks that `const version` in `main.go` matches the tag, runs `build.sh` and
+publishes the binaries + `SHA256SUMS.txt` as a pre-release when the tag contains `alpha`/`beta`.
 
 ```bash
-# bump: editar const version en main.go, commit, y
+# bump: edit const version in main.go, commit, then
 git tag -a v0.1.1-alpha -m "v0.1.1-alpha" && git push origin main --tags
 ```
 
-## Diagnóstico en alpha
+## Diagnostics in alpha
 
-Cuando algo no se vea bien contra un VBR real, mandá dos cosas:
+When something looks wrong against a real VBR, send two things:
 
-1. Botón **Diagnóstico** en la barra superior → descarga `yogachain-diagnostics-<fecha>.json`: versión, SO,
-   sesión (sin credenciales ni tokens), resumen del inventario, 1–2 ítems crudos de cada colección de la
-   REST API (para comparar el schema real con lo asumido en `// LAB`) y la traza de las últimas 300
-   llamadas REST con status, ms, bytes y error.
-2. `yogachain.log` (al lado del binario). Con `-debug` (default) incluye cada GET, el paginado y el primer
-   ítem crudo de cada colección. Nunca contiene passwords ni tokens.
+1. The **Diagnostics** button in the top bar → downloads `yogachain-diagnostics-<date>.json`: version, OS,
+   session (no credentials or tokens), inventory summary, 1–2 raw items of each REST API collection
+   (to compare the real schema with what `// LAB` assumes) and the trace of the last 300 REST calls
+   with status, ms, bytes and error.
+2. `yogachain.log` (next to the binary). With `-debug` (default) it includes every GET, the paging and the
+   first raw item of each collection. It never contains passwords or tokens.
