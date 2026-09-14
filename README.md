@@ -95,15 +95,23 @@ yogachain/
 | GET | `/api/{session}/raw/{path...}` | read-only passthrough to the REST API (e.g. `raw/v1/backups`) to inspect the real schema |
 | GET | `/api/{session}/diagnostics` | alpha diagnostics bundle (see below) |
 
+## Validated in the field (vbr-03, v13 / API 1.3-rev2) — `// FIELD` in the code
+
+- `dedupRatio` / `compressRatio` in `BackupFileModel` are the **percentage of size remaining** after each stage (65 + 93 → 61 % of `dataSize`). Reduction factor = 100 / value. 0 = no data (Nutanix / plug-in placeholder files).
+- `BackupObjectModel.backupId` does **not** match the `backupId` of the object's restore points; the job ↔ object relation is taken from `GET /backups/{id}/objects`.
+- `/backupObjects/{id}/restorePoints` can return points from other backups of the same object; the job pivot keeps only the job's backups, the repository pivot only that repository.
+- Scale-out repositories are not in `/repositories/states`; they come from `/backupInfrastructure/scaleOutRepositories`.
+- Real `EJobType` values: `VSphereBackup`, `HyperVBackup`, `CloudDirectorBackup`, `WindowsAgentBackup`, `LinuxAgentBackup`, `FileBackup`, `ObjectStorageBackup`, `BackupCopy`, `VSphereReplica`, `SureBackupContentScan`. Replicas and SureBackup have no backup chain and are shown dimmed.
+- Immediate backup copy: `schedule = {scheduleMode: Continuous, type: Immediate}`.
+- Nutanix AHV and the Application Backup Repository (RMAN / SQL plug-in) return `sessionId = 00000000-…`: no task session to derive guest processing from.
+- `v1/jobs` can take > 75 s on a loaded VBR (timeout budget inherited from Yoga Benchmark is right).
+
 ## Pending / to validate in a lab (`// LAB` in the code)
 
-- Workload identity across backups (primary, copy, tape): currently `BackupObjectModel.objectId`, falling back to the name.
 - **Synthetic vs. active full**: the API returns `Increment|Full`; `taskSession.algorithm = Synthetic` is queried only in the detail view.
-- Scale of `dedupRatio` / `compressRatio` (factor vs. percentage) in `BackupFileModel`.
-- Immutability per restore point: not in the RP; derived from `creationTime + repo.immDays` (hardened / object lock).
+- Immutability per restore point: not in the RP; derived from `creationTime + repo.immDays` (hardened / object lock). SOBR immutability taken from the most restrictive performance extent.
 - Text patterns in `/taskSessions/{id}/logs` to classify guest processing (VSS, Oracle, SQL, PostgreSQL).
-- Real `EJobType` values for backup copy / tape / agents; `backupRepositoryId` on copy jobs.
-- **RMAN / SAP HANA / SQL plug-in** backups: they do not show up as VM restore points (`platformName = ApplicationBackupRepository`). Affects phase 2.
+- Application Backup Repository objects (RMAN / SAP HANA / SQL plug-in) show up as a workload with `platformName = ApplicationBackupRepository`, `StartFlrRestore` only. To be handled as its own workload type in phase 2.
 - Self-signed certificate: `verify_ssl=false` by default. CORS open (the frontend is served from the same origin).
 - `aaip=1` against a real VBR: 2–3 calls per restore point → cache by `sessionId`.
 

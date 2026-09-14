@@ -18,11 +18,11 @@ func TestInventoryDemo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inventario demo: %v", err)
 	}
-	if len(inv.Jobs) != 7 || len(inv.Repos) != 4 || len(inv.VMs) != 14 {
-		t.Fatalf("inventario: jobs=%d repos=%d vms=%d (esperado 7/4/14)", len(inv.Jobs), len(inv.Repos), len(inv.VMs))
+	if len(inv.Jobs) != 8 || len(inv.Repos) != 5 || len(inv.VMs) != 14 {
+		t.Fatalf("inventario: jobs=%d repos=%d vms=%d (esperado 8/5/14)", len(inv.Jobs), len(inv.Repos), len(inv.VMs))
 	}
 	j := inv.Job("j7")
-	if j == nil || j.Kind != "Backup" || j.Comp != "DedupFriendly" || j.GFS != "W4 / M12 / Y1" {
+	if j == nil || j.Kind != "Backup" || j.Type != "VSphereBackup" || j.Comp != "DedupFriendly" || j.GFS != "W4 / M12 / Y1" {
 		t.Fatalf("job j7 mal mapeado: %+v", j)
 	}
 	if j.Aaip.On == nil || !*j.Aaip.On || j.Aaip.Oracle == nil || j.Aaip.Oracle["archiveLogs"] != "DeleteExpiredHours" {
@@ -30,6 +30,15 @@ func TestInventoryDemo(t *testing.T) {
 	}
 	if r := inv.Repo("r3"); r == nil || r.ImmDays != 30 {
 		t.Fatalf("inmutabilidad object storage no mapeada: %+v", r)
+	}
+	if sure := inv.Job("j-sure"); sure == nil || !sure.NoChain || sure.Kind != "SureBackup" {
+		t.Fatalf("SureBackup deberia marcarse sin cadena: %+v", sure)
+	}
+	if sobr := inv.Repo("sobr-1"); sobr == nil || sobr.Type != "ScaleOut" || sobr.CapacityGB != 120000 {
+		t.Fatalf("SOBR no mapeado: %+v", sobr)
+	}
+	if len(inv.Job("j1").VMIDs) != 3 {
+		t.Fatalf("j1 deberia tener 3 VMs via /backups/{id}/objects: %v", inv.Job("j1").VMIDs)
 	}
 	ora := inv.VM("vm-v13")
 	if ora == nil || ora.App != "Oracle" || len(ora.ObjectIDs) != 2 { // primario + tape
@@ -106,6 +115,24 @@ func TestRestorePointsAndDetail(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+func TestRatioSemantics(t *testing.T) {
+	// FIELD: 65 % restante -> 1.54x; 25 % -> 4x; 0 -> sin dato -> 1x
+	for v, want := range map[float64]float64{65: 100.0 / 65, 25: 4, 100: 1, 0: 1} {
+		if got := ratio(v); got < want-0.001 || got > want+0.001 {
+			t.Fatalf("ratio(%v)=%v, esperado %v", v, got, want)
+		}
+	}
+	if k, nc := jobKind("WindowsAgentBackup"); k != "Agent backup" || nc {
+		t.Fatalf("WindowsAgentBackup -> %q %v", k, nc)
+	}
+	if k, nc := jobKind("VSphereReplica"); k != "Replica" || !nc {
+		t.Fatalf("VSphereReplica -> %q %v", k, nc)
+	}
+	if got := schedText(obj{"scheduleMode": "Continuous", "type": "Immediate"}); got != "Immediate" {
+		t.Fatalf("schedText copy inmediato = %q", got)
 	}
 }
 

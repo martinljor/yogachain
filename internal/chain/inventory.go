@@ -10,13 +10,12 @@ import (
 	"yogachain/internal/vbr"
 )
 
-// Todo lo marcado con  // LAB  hay que confirmarlo contra un VBR real: el schema
-// sale de la referencia 1.3-rev2 pero algunos valores (tipos de job, nombres de
-// plataforma, escala de los ratios, textos de log) conviene verlos con datos reales.
+// Lo marcado con  // LAB  todavia no se confirmo contra un VBR real. Lo que ya se
+// valido con el diagnostico de vbr-03 (v13, API 1.3-rev2) esta marcado  // FIELD.
 
 const invKey = "inventory"
 
-// Inventory carga (o devuelve de la sesion) jobs, workloads y repositorios.
+// LoadInventory carga (o devuelve de la sesion) jobs, workloads y repositorios.
 func LoadInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 	if v, ok := s.Value(invKey); ok {
 		if inv, ok := v.(*Inventory); ok {
@@ -44,7 +43,10 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 		inv.Server, inv.APIVersion = "demo-vbr", "demo"
 	}
 
-	// --- repositorios: config (inmutabilidad) + estado (capacidad) -------------
+	// --- repositorios: config (inmutabilidad) + estado (capacidad) + SOBR -------
+	// FIELD: /repositories/states no lista los scale-out; los jobs que apuntan a un
+	// SOBR quedaban sin nombre de repositorio. Los SOBR salen de
+	// /backupInfrastructure/scaleOutRepositories (como en yogabench).
 	cfg := map[string]obj{}
 	repos, err := getAll(ctx, s, "v1/backupInfrastructure/repositories", 0)
 	if err != nil {
@@ -74,6 +76,31 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 			Online: st["isOnline"] == nil || boolean(st, "isOnline"),
 		})
 	}
+	if sobrs, err := getAll(ctx, s, "v1/backupInfrastructure/scaleOutRepositories", 0); err != nil {
+		log.Printf("inventory: scaleOutRepositories failed (%v), SOBR-backed jobs will show no repository name", err)
+	} else {
+		for _, so := range sobrs {
+			id := str(so, "id")
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			r := Repo{ID: id, Name: str(so, "name"), Type: "ScaleOut", Online: true}
+			// inmutabilidad: la del extent mas restrictivo del performance tier  // LAB
+			for _, e := range arr(sub(so, "performanceTier"), "performanceExtents") {
+				eo, _ := e.(map[string]any)
+				if x := inv.Repo(str(eo, "id")); x != nil {
+					r.CapacityGB += x.CapacityGB
+					r.UsedGB += x.UsedGB
+					r.FreeGB += x.FreeGB
+					if x.ImmDays > r.ImmDays {
+						r.ImmDays = x.ImmDays
+					}
+				}
+			}
+			inv.Repos = append(inv.Repos, r)
+		}
+	}
 
 	// --- jobs: lista + detalle (storage, GFS, guest processing) ---------------
 	apps := map[string]string{} // nombre de VM -> app (segun appSettings del job)
@@ -91,8 +118,9 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 		storage := sub(full, "storage")
 		adv := sub(sub(storage, "advancedSettings"), "storageData")
 		repoID := str(storage, "backupRepositoryId")
+		kind, noChain := jobKind(str(j, "type"))
 		job := Job{
-			ID: id, Name: str(j, "name"), Kind: jobKind(str(j, "type")), RepoID: repoID, RPO: 24,
+			ID: id, Name: str(j, "name"), Type: str(j, "type"), Kind: kind, NoChain: noChain, RepoID: repoID, RPO: 24,
 			Sched: schedText(sub(full, "schedule")), GFS: gfsText(sub(storage, "gfsPolicy")),
 			Comp: str(adv, "compressionLevel"), Block: str(adv, "storageOptimization"),
 			Enc: boolean(sub(adv, "encryption"), "isEnabled"), Aaip: aaipConfig(full),
@@ -127,10 +155,12 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 		inv.backupPlatform[id] = str(b, "platformName")
 		if j := inv.Job(jobID); j != nil {
 			j.BackupIDs = append(j.BackupIDs, id)
-			if j.RepoID == "" { // backup copy / tape a veces no traen backupRepositoryId en storage  // LAB
+			if j.RepoID == "" { // FIELD: backup copy no trae storage.backupRepositoryId
 				j.RepoID = str(b, "repositoryId")
 				if r := inv.Repo(j.RepoID); r != nil {
 					j.RepoName = r.Name
+				} else {
+					j.RepoName = str(b, "repositoryName")
 				}
 			}
 		}
@@ -138,41 +168,85 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 
 	// --- workloads: backupObjects agrupados por identidad de VM -------------------
 	// Un mismo VM aparece una vez por backup (primario, copia, tape) con distinto
-	// id de backupObject; lo unificamos por objectId (moref/uuid) y, si no viene,
-	// por nombre.  // LAB: confirmar campo objectId en BackupObjectModel.
+	// id de backupObject; lo unificamos por objectId (moref/uuid). Sin objectId
+	// (agentes, plug-in ABR) la identidad es el propio backupObject.
+	// FIELD: BackupObjectModel.backupId NO coincide con el backupId de sus restore
+	// points (apunta a otro backup, a veces uno que /backups no lista). La relacion
+	// job <-> objeto se toma de /backups/{id}/objects, que si es confiable.
 	objects, err := getAll(ctx, s, "v1/backupObjects", 0)
 	if err != nil {
 		return nil, err
 	}
 	byKey := map[string]*Workload{}
-	for _, o := range objects {
+	add := func(o obj) *Workload {
 		boID := str(o, "id")
 		key := str(o, "objectId")
 		if key == "" {
-			key = strings.ToLower(str(o, "name"))
+			key = boID
 		}
 		w := byKey[key]
 		if w == nil {
-			w = &Workload{ID: key, Name: str(o, "name"), Platform: str(o, "platformName"), SizeGB: toGB(o, "size"), App: apps[str(o, "name")]}
+			w = &Workload{ID: key, Name: str(o, "name"), Platform: str(o, "platformName"), Kind: str(o, "type"),
+				SizeGB: toGB(o, "size"), App: apps[str(o, "name")]}
 			byKey[key] = w
 		}
-		w.ObjectIDs = append(w.ObjectIDs, boID)
+		if !contains(w.ObjectIDs, boID) {
+			w.ObjectIDs = append(w.ObjectIDs, boID)
+		}
 		inv.objectVM[boID] = key
-		inv.objectBackup[boID] = str(o, "backupId")
-		if jobID := inv.backupJob[str(o, "backupId")]; jobID != "" && !contains(w.JobIDs, jobID) {
+		if b := str(o, "backupId"); b != "" && inv.objectBackup[boID] == "" {
+			inv.objectBackup[boID] = b
+		}
+		return w
+	}
+	for _, o := range objects {
+		add(o)
+	}
+	link := func(w *Workload, jobID string) {
+		if jobID == "" {
+			return
+		}
+		if !contains(w.JobIDs, jobID) {
 			w.JobIDs = append(w.JobIDs, jobID)
-			if j := inv.Job(jobID); j != nil && !contains(j.VMIDs, key) {
-				j.VMIDs = append(j.VMIDs, key)
+		}
+		if j := inv.Job(jobID); j != nil && !contains(j.VMIDs, w.ID) {
+			j.VMIDs = append(j.VMIDs, w.ID)
+		}
+	}
+	for _, b := range backups {
+		bid := str(b, "id")
+		objs, err := getAll(ctx, s, "v1/backups/"+bid+"/objects", 0)
+		if err != nil {
+			log.Printf("inventory: objects of backup %s failed: %v", bid, err)
+			continue
+		}
+		for _, o := range objs {
+			w := add(o)
+			inv.objectBackup[str(o, "id")] = bid
+			link(w, inv.backupJob[bid])
+		}
+	}
+	// fallback: objetos cuyo backupId si esta en /backups
+	for _, w := range byKey {
+		if len(w.JobIDs) == 0 {
+			for _, oid := range w.ObjectIDs {
+				link(w, inv.backupJob[inv.objectBackup[oid]])
 			}
 		}
 	}
 	for _, w := range byKey {
 		inv.VMs = append(inv.VMs, *w)
 	}
-	sort.Slice(inv.VMs, func(a, b int) bool { return inv.VMs[a].Name < inv.VMs[b].Name })
-	sort.Slice(inv.Jobs, func(a, b int) bool { return inv.Jobs[a].Name < inv.Jobs[b].Name })
-	sort.Slice(inv.Repos, func(a, b int) bool { return inv.Repos[a].Name < inv.Repos[b].Name })
-	log.Printf("inventory: %d jobs, %d workloads, %d repositories, %d backups", len(inv.Jobs), len(inv.VMs), len(inv.Repos), len(backups))
+	sort.Slice(inv.VMs, func(a, b int) bool { return strings.ToLower(inv.VMs[a].Name) < strings.ToLower(inv.VMs[b].Name) })
+	sort.Slice(inv.Jobs, func(a, b int) bool { return strings.ToLower(inv.Jobs[a].Name) < strings.ToLower(inv.Jobs[b].Name) })
+	sort.Slice(inv.Repos, func(a, b int) bool { return strings.ToLower(inv.Repos[a].Name) < strings.ToLower(inv.Repos[b].Name) })
+	linked := 0
+	for _, w := range inv.VMs {
+		if len(w.JobIDs) > 0 {
+			linked++
+		}
+	}
+	log.Printf("inventory: %d jobs, %d workloads (%d linked to a job), %d repositories, %d backups", len(inv.Jobs), len(inv.VMs), linked, len(inv.Repos), len(backups))
 	return inv, nil
 }
 
@@ -187,23 +261,39 @@ func contains(xs []string, x string) bool {
 	return false
 }
 
-// jobKind: EJobType -> etiqueta corta.  // LAB: completar con los valores reales
-func jobKind(t string) string {
+// jobKind: EJobType -> etiqueta corta + si el job no genera cadena de backup
+// (SureBackup, replicas) y por lo tanto no tiene restore points que mostrar.
+// FIELD: valores vistos en vbr-03: VSphereBackup, HyperVBackup, CloudDirectorBackup,
+// WindowsAgentBackup, LinuxAgentBackup, FileBackup, ObjectStorageBackup,
+// VSphereReplica, SureBackupContentScan, mas los copy.
+func jobKind(t string) (kind string, noChain bool) {
 	switch t {
-	case "Backup", "":
-		return "Backup"
-	case "BackupCopy", "SimpleBackupCopy", "ImmediateBackupCopy":
-		return "Backup copy"
+	case "Backup", "VSphereBackup", "HyperVBackup", "CloudDirectorBackup", "NutanixBackup", "ProxmoxBackup", "":
+		return "Backup", false
+	case "BackupCopy", "SimpleBackupCopy", "ImmediateBackupCopy", "PeriodicBackupCopy":
+		return "Backup copy", false
 	case "BackupToTape":
-		return "Backup to tape"
+		return "Backup to tape", false
 	case "FileToTape":
-		return "File to tape"
-	case "AgentBackup", "EpAgentBackup":
-		return "Agent backup"
-	case "Replica":
-		return "Replica"
+		return "File to tape", false
+	case "WindowsAgentBackup", "LinuxAgentBackup", "MacAgentBackup", "AgentBackup", "EpAgentBackup", "EpAgentPolicy":
+		return "Agent backup", false
+	case "FileBackup", "NasBackup":
+		return "File share backup", false
+	case "ObjectStorageBackup":
+		return "Object storage backup", false
+	case "EntraIDTenantBackup", "EntraIDAuditLogBackup":
+		return "Entra ID backup", false
 	}
-	return t
+	switch {
+	case strings.Contains(t, "Replica"):
+		return "Replica", true
+	case strings.HasPrefix(t, "SureBackup"):
+		return "SureBackup", true
+	case strings.Contains(t, "Copy"):
+		return "Backup copy", false
+	}
+	return t, false
 }
 
 func gfsText(p obj) string {
@@ -226,8 +316,18 @@ func gfsText(p obj) string {
 	return strings.Join(parts, " / ")
 }
 
+// schedText resume el schedule. FIELD: backup copy inmediato viene como
+// {scheduleMode: Continuous, type: Immediate} sin runAutomatically.
 func schedText(sch obj) string {
-	if sch == nil || !boolean(sch, "runAutomatically") {
+	if sch == nil {
+		return "Manual"
+	}
+	if t := str(sch, "type"); t == "Immediate" || str(sch, "scheduleMode") == "Continuous" {
+		return "Immediate"
+	}
+	if t := str(sch, "type"); t == "Periodically" || t == "Daily" || t == "Monthly" {
+		// modo periodico explicito (copy jobs): sigue abajo con los detalles
+	} else if !boolean(sch, "runAutomatically") && sch["runAutomatically"] != nil {
 		return "Manual"
 	}
 	if d := sub(sch, "daily"); boolean(d, "isEnabled") {
@@ -239,7 +339,10 @@ func schedText(sch obj) string {
 	if m := sub(sch, "monthly"); boolean(m, "isEnabled") {
 		return "Monthly"
 	}
-	return "Scheduled"
+	if boolean(sch, "runAutomatically") {
+		return "Scheduled"
+	}
+	return "Manual"
 }
 
 // aaipConfig resume guestProcessing.appAwareProcessing. Toma la primera
@@ -273,10 +376,17 @@ func aaipConfig(job obj) AaipConfig {
 }
 
 // immutabilityDays: object storage -> bucket.immutability; hardened ->
-// repository.makeRecentBackupsImmutableDays.  // LAB
+// repository.makeRecentBackupsImmutableDays; FIELD: algunos tipos traen
+// repository.immutability{isEnabled, daysCount}.
 func immutabilityDays(c obj) int {
 	if b := sub(sub(c, "bucket"), "immutability"); boolean(b, "isEnabled") {
 		return int(num(b, "daysCount"))
 	}
-	return int(num(sub(c, "repository"), "makeRecentBackupsImmutableDays"))
+	r := sub(c, "repository")
+	if i := sub(r, "immutability"); boolean(i, "isEnabled") {
+		if d := int(num(i, "daysCount")); d > 0 {
+			return d
+		}
+	}
+	return int(num(r, "makeRecentBackupsImmutableDays"))
 }

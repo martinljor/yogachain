@@ -24,8 +24,10 @@ func Aaip(ctx context.Context, s *vbr.Session, inv *Inventory, rp *RestorePoint)
 		rp.Aaip = "off"
 		return
 	}
-	if rp.SessionID == "" {
-		rp.Aaip, rp.AaipDetail = "ok", "No sessionId on the restore point"
+	// FIELD: Nutanix AHV y el plug-in ABR devuelven sessionId 00000000-...: no hay
+	// task session que consultar (daba 404). Queda "sin datos", no "ok".
+	if rp.SessionID == "" || strings.Trim(rp.SessionID, "0-") == "" {
+		rp.Aaip, rp.AaipDetail = "", "No backup session is linked to this restore point (platform managed outside the job: Nutanix, plug-in, copy)"
 		return
 	}
 	tasks, err := getAll(ctx, s, "v1/sessions/"+rp.SessionID+"/taskSessions", 0)

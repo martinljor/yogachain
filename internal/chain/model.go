@@ -20,7 +20,9 @@ type AaipConfig struct {
 type Job struct {
 	ID        string     `json:"id"`
 	Name      string     `json:"name"`
-	Kind      string     `json:"kind"` // Backup | Backup copy | Backup to tape | ...
+	Type      string     `json:"type"`    // EJobType crudo (VSphereBackup, BackupCopy, ...)
+	Kind      string     `json:"kind"`    // etiqueta: Backup | Backup copy | Agent backup | ...
+	NoChain   bool       `json:"noChain"` // SureBackup / replica: sin restore points de backup
 	RepoID    string     `json:"repoId"`
 	RepoName  string     `json:"repoName"`
 	Sched     string     `json:"sched"`
@@ -42,6 +44,7 @@ type Workload struct {
 	App       string   `json:"app,omitempty"` // SQL | Oracle | PostgreSQL | AD
 	DB        string   `json:"db,omitempty"`
 	Platform  string   `json:"platform"`
+	Kind      string   `json:"kind,omitempty"` // BackupObjectModel.type (VM, ...)
 	JobIDs    []string `json:"jobIds"`
 	ObjectIDs []string `json:"objectIds"` // backupObject ids (uno por backup que lo contiene)
 }
@@ -76,6 +79,8 @@ type RestorePoint struct {
 	Mal               string   `json:"mal"` // Clean | Suspicious | Infected
 	File              string   `json:"file"`
 	AllowedOperations []string `json:"allowedOperations"`
+	Platform          string   `json:"platform,omitempty"` // platformName del RP (VMware, Nutanix, LinuxPhysical...)
+	GuestOS           string   `json:"guestOs,omitempty"`  // guestOsFamily (Windows, Linux, Other)
 	SessionID         string   `json:"-"`
 	Aaip              string   `json:"aaip,omitempty"` // ok | warn | fail | off
 	AaipDetail        string   `json:"aaipDetail,omitempty"`

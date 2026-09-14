@@ -80,9 +80,11 @@
   .item { width:100%; text-align:left; display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:8px 10px; border-radius:6px; align-items:center; background:none; color:var(--text); font-weight:500; }
   .item:hover { background:var(--panel2); color:var(--text); }
   .item.on { background:var(--blue-soft); }
-  .item .n { font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .item .s { grid-column:1; color:var(--muted); font-size:12px; font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .item .c { grid-row:1/3; color:var(--muted); font-size:12px; font-weight:400; }
+  .item .n { grid-column:1; grid-row:1; min-width:0; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .s { grid-column:1; grid-row:2; min-width:0; color:var(--muted); font-size:12px; font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .c { grid-column:2; grid-row:1/3; color:var(--muted); font-size:12px; font-weight:400; }
+  .item.nochain { opacity:.5; }
+  .badge { line-height:1.4; }
   .badge { display:inline-block; font-size:10.5px; padding:1px 6px; border-radius:4px; background:var(--panel2); color:var(--muted); vertical-align:1px; margin-left:6px; font-weight:600; }
   .badge.bad { background:var(--bad-soft); color:var(--red); }
   .badge.gfs { background:var(--warn-soft); color:var(--amber); }
@@ -312,6 +314,7 @@ const I18N = {
     'form.host':'Host / IP del VBR','form.port':'Puerto','form.user':'Usuario','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negocia la más alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositorio','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositorios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiencia','mode.app':'Aplicación',
+    'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup a cinta','kind.filetape':'Archivos a cinta','kind.agent':'Backup de agente','kind.nas':'Backup de file share','kind.obj':'Backup de object storage','kind.entra':'Backup de Entra ID','kind.replica':'Réplica (sin cadena de backup)','kind.sure':'SureBackup (sin cadena de backup)','tl.nochain':'Este job no genera restore points de backup (réplica / SureBackup). Las réplicas llegan en la fase 3.',
     'lg.full':'Full activo','lg.synth':'Full sintético','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Hueco vs. RPO','lg.imm':'Inmutable','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
     'k.job':'Job','k.vm':'Workload','k.repo':'Repositorio','k.lanes':'{n} carriles','k.loading':'cargando {n}/{t}',
     'st.rps':'Restore points','st.in':'en {d} d','st.fulls':'Fulls','st.incs':'+ {n} inc/copia','st.gfs':'GFS','st.data':'Datos origen','st.disk':'En disco','st.red':'Reducción','st.saves':'ahorra {p}%','st.cd':'Compresión · Dedup','st.w':'ponderado','st.app':'App-consistentes','st.of':'de {t}','st.imm':'Inmutables hoy','st.oldest':'RP más antiguo','st.gaps':'Huecos vs. RPO','st.mal':'Malware',
@@ -346,6 +349,7 @@ const I18N = {
     'form.host':'VBR host / IP','form.port':'Port','form.user':'Username','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negotiates the highest)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repository','rail.search':'Search…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositories','rail.of':'{n} of {t}',
     'mode.type':'Type','mode.eff':'Efficiency','mode.app':'Application',
+    'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup to tape','kind.filetape':'File to tape','kind.agent':'Agent backup','kind.nas':'File share backup','kind.obj':'Object storage backup','kind.entra':'Entra ID backup','kind.replica':'Replica (no backup chain)','kind.sure':'SureBackup (no backup chain)','tl.nochain':'This job produces no backup restore points (replica / SureBackup). Replicas arrive in phase 3.',
     'lg.full':'Active full','lg.synth':'Synthetic full','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Gap vs. RPO','lg.imm':'Immutable','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
     'k.job':'Job','k.vm':'Workload','k.repo':'Repository','k.lanes':'{n} lanes','k.loading':'loading {n}/{t}',
     'st.rps':'Restore points','st.in':'in {d} d','st.fulls':'Fulls','st.incs':'+ {n} inc/copy','st.gfs':'GFS','st.data':'Source data','st.disk':'On disk','st.red':'Reduction','st.saves':'saves {p}%','st.cd':'Compression · Dedup','st.w':'weighted','st.app':'App-consistent','st.of':'of {t}','st.imm':'Immutable today','st.oldest':'Oldest RP','st.gaps':'Gaps vs. RPO','st.mal':'Malware',
@@ -380,6 +384,7 @@ const I18N = {
     'form.host':'Host / IP do VBR','form.port':'Porta','form.user':'Usuário','form.pass':'Senha','form.apiver':'Versão da API','conn.apiauto':'auto (negocia a mais alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositório','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositórios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiência','mode.app':'Aplicação',
+    'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup em fita','kind.filetape':'Arquivos em fita','kind.agent':'Backup de agente','kind.nas':'Backup de file share','kind.obj':'Backup de object storage','kind.entra':'Backup do Entra ID','kind.replica':'Réplica (sem cadeia de backup)','kind.sure':'SureBackup (sem cadeia de backup)','tl.nochain':'Este job não gera restore points de backup (réplica / SureBackup). Réplicas chegam na fase 3.',
     'lg.full':'Full ativo','lg.synth':'Full sintético','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Lacuna vs. RPO','lg.imm':'Imutável','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
     'k.job':'Job','k.vm':'Workload','k.repo':'Repositório','k.lanes':'{n} faixas','k.loading':'carregando {n}/{t}',
     'st.rps':'Restore points','st.in':'em {d} d','st.fulls':'Fulls','st.incs':'+ {n} inc/cópia','st.gfs':'GFS','st.data':'Dados de origem','st.disk':'Em disco','st.red':'Redução','st.saves':'economiza {p}%','st.cd':'Compressão · Dedup','st.w':'ponderado','st.app':'App-consistentes','st.of':'de {t}','st.imm':'Imutáveis hoje','st.oldest':'RP mais antigo','st.gaps':'Lacunas vs. RPO','st.mal':'Malware',
@@ -454,6 +459,10 @@ const fmtDT = x => { const v = d(x); return v.toLocaleDateString(LOCALE[LANG], {
 const fmtSize = g => g >= 1000 ? (g/1000).toFixed(2) + ' TB' : (g||0).toFixed(0) + ' GB';
 const label = r => t('t.' + r.type);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// kindLabel: etiqueta traducida del tipo de job (Backup, Backup copy, Agent backup...)
+const KIND_KEYS = { 'Backup':'kind.backup', 'Backup copy':'kind.copy', 'Backup to tape':'kind.tape', 'File to tape':'kind.filetape', 'Agent backup':'kind.agent', 'File share backup':'kind.nas', 'Object storage backup':'kind.obj', 'Entra ID backup':'kind.entra', 'Replica':'kind.replica', 'SureBackup':'kind.sure' };
+function kindLabel(j) { const k = KIND_KEYS[j.kind]; return k ? t(k) : (j.kind || j.type || ''); }
 
 // --- estado -------------------------------------------------------------------
 const S = { inv:null, pivot:'job', selectedId:null, days:30, mode:'type', query:'', rps:[], total:0, selectedRp:null, detail:null, loadSeq:0 };
@@ -536,14 +545,14 @@ $('q').addEventListener('input', e => { S.query = e.target.value.toLowerCase(); 
 function renderList() {
   if (!S.inv) return;
   let items = [], title = '';
-  if (S.pivot === 'job') { title = t('rail.jobs'); items = S.inv.jobs.map(j => ({ id:j.id, n:j.name, s:`${j.kind} · ${j.repoName}`, badge: j.aaip && j.aaip.on ? 'AAIP' : j.gfs !== '—' ? 'GFS' : null })); }
-  if (S.pivot === 'vm') { title = t('rail.vms'); items = S.inv.vms.map(v => ({ id:v.id, n:v.name, s:v.os || v.platform, badge: v.app || null })); }
+  if (S.pivot === 'job') { title = t('rail.jobs'); items = S.inv.jobs.map(j => ({ id:j.id, n:j.name, s:`${kindLabel(j)}${j.repoName ? ' · ' + j.repoName : ''}`, c: j.noChain ? '' : `${(j.vmIds||[]).length}`, cls: j.noChain ? 'nochain' : '', badge: j.aaip && j.aaip.on ? 'AAIP' : j.gfs !== '—' ? 'GFS' : null })); }
+  if (S.pivot === 'vm') { title = t('rail.vms'); items = S.inv.vms.map(v => ({ id:v.id, n:v.name, s:[v.platform, v.os].filter(Boolean).join(' · '), c: `${(v.jobIds||[]).length}`, badge: v.app || null })); }
   if (S.pivot === 'repo') { title = t('rail.repos'); items = S.inv.repos.map(r => ({ id:r.id, n:r.name, s:`${r.type}${r.usedGB ? ' · ' + fmtSize(r.usedGB) : ''}`, badge: r.immDays ? `imm ${r.immDays}d` : null })); }
   $('railTitle').textContent = title;
   const shown = items.filter(i => !S.query || i.n.toLowerCase().includes(S.query) || (i.s||'').toLowerCase().includes(S.query));
   $('railCount').textContent = shown.length;
   $('pageInfo').textContent = tp('rail.of', { n: shown.length, t: items.length });
-  $('list').innerHTML = shown.map(i => `<button class="item ${i.id === S.selectedId ? 'on' : ''}" data-id="${esc(i.id)}"><span class="n">${esc(i.n)}${i.badge ? `<span class="badge ${i.badge === 'GFS' ? 'gfs' : /^imm/.test(i.badge) ? '' : 'app'}">${esc(i.badge)}</span>` : ''}</span><span class="s">${esc(i.s)}</span></button>`).join('');
+  $('list').innerHTML = shown.map(i => `<button class="item ${i.id === S.selectedId ? 'on' : ''} ${i.cls || ''}" data-id="${esc(i.id)}"><span class="n">${esc(i.n)}${i.badge ? `<span class="badge ${i.badge === 'GFS' ? 'gfs' : /^imm/.test(i.badge) ? '' : 'app'}">${esc(i.badge)}</span>` : ''}</span><span class="s">${esc(i.s)}</span>${i.c ? `<span class="c mono">${esc(i.c)}</span>` : ''}</button>`).join('');
   $('list').querySelectorAll('.item').forEach(b => b.addEventListener('click', async () => { S.selectedId = b.dataset.id; await selectAndLoad(); }));
 }
 
@@ -566,15 +575,15 @@ function lanes() {
     const j = byId(inv.jobs, S.selectedId); if (!j) return { kind:t('k.job'), title:'—', sub:'', rpo:24, lanes:[] };
     const vmIds = [...new Set(rps.map(r => r.vmId))].concat((j.vmIds||[]).filter(v => !rps.some(r => r.vmId === v)));
     return { kind:t('k.job'), title:j.name, rpo:j.rpo,
-      sub:`${j.kind} · ${j.sched} · GFS ${j.gfs} · ${tp('sub.rpo',{h:j.rpo})}${j.comp ? ' · compressionLevel ' + j.comp : ''}${j.block ? ' · ' + tp('sub.block',{b:j.block}) : ''}${j.enc ? ' · ' + t('sub.enc') : ''}${aaipSub(j)}`,
-      lanes: vmIds.map(v => { const vm = byId(inv.vms, v) || { name:v }; return { n:vm.name, s:vm.os || vm.platform || '', app:vm.app, logs:logMins(j, vm), pts:rps.filter(r => r.vmId === v) }; }) };
+      sub:`${kindLabel(j)} · ${j.sched} · GFS ${j.gfs} · ${tp('sub.rpo',{h:j.rpo})}${j.comp ? ' · compressionLevel ' + j.comp : ''}${j.block ? ' · ' + tp('sub.block',{b:j.block}) : ''}${j.enc ? ' · ' + t('sub.enc') : ''}${aaipSub(j)}`,
+      lanes: vmIds.map(v => { const vm = byId(inv.vms, v) || { name:v }; const pts = rps.filter(r => r.vmId === v); return { n:vm.name, s:laneSub(vm, pts), app:vm.app, logs:logMins(j, vm), pts }; }) };
   }
   if (S.pivot === 'vm') {
     const v = byId(inv.vms, S.selectedId); if (!v) return { kind:t('k.vm'), title:'—', sub:'', rpo:24, lanes:[] };
     const js = inv.jobs.filter(j => (v.jobIds||[]).includes(j.id) || rps.some(r => r.jobId === j.id));
     return { kind:t('k.vm'), title:v.name, rpo:24,
       sub:`${v.os || v.platform}${v.app ? ' · ' + tp('sub.detected',{app:v.app}) : ''} · ${fmtSize(v.sizeGB)} · ${tp('sub.protected',{n:js.length})}`,
-      lanes: js.map(j => ({ n:j.name, s:`${j.kind} → ${j.repoName}`, app: j.aaip && j.aaip.on ? 'AAIP' : null, logs:logMins(j, v), rpo:j.rpo, pts:rps.filter(r => r.jobId === j.id) })) };
+      lanes: js.map(j => ({ n:j.name, s:`${kindLabel(j)} → ${j.repoName || '—'}`, app: j.aaip && j.aaip.on ? 'AAIP' : null, logs:logMins(j, v), rpo:j.rpo, pts:rps.filter(r => r.jobId === j.id) })) };
   }
   const rp = byId(inv.repos, S.selectedId); if (!rp) return { kind:t('k.repo'), title:'—', sub:'', rpo:24, lanes:[] };
   const vmIds = [...new Set(rps.map(r => r.vmId))];
@@ -582,6 +591,8 @@ function lanes() {
     sub:`${rp.type}${rp.usedGB ? ` · usedSpaceGB ${fmtSize(rp.usedGB)}` : ''}${rp.capacityGB ? ` / ${fmtSize(rp.capacityGB)}` : ''}${rp.immDays ? ' · ' + tp('sub.imm',{d:rp.immDays}) : ''}`,
     lanes: vmIds.map(v => { const vm = byId(inv.vms, v) || { name:v }; const js = inv.jobs.filter(j => rps.some(r => r.vmId === v && r.jobId === j.id)); return { n:vm.name, s:js.map(j => j.name).join(', '), app:vm.app, logs:Math.max(0, ...js.map(j => logMins(j, vm))), pts:rps.filter(r => r.vmId === v) }; }) };
 }
+// laneSub: plataforma + SO del workload; si el inventario no los trae, se toman del primer RP (FIELD: guestOsFamily).
+function laneSub(vm, pts) { const p = vm.platform || (pts[0] && pts[0].platform) || ''; const os = vm.os || (pts[0] && pts[0].guestOs && pts[0].guestOs !== 'Other' ? pts[0].guestOs : ''); return [p, os].filter(Boolean).join(' · '); }
 function gapsFor(pts, rpoH) {
   const out = [], s = [...pts].sort((a, b) => d(a.date) - d(b.date)), tol = rpoH * 3600000 * 1.25;
   for (let i = 1; i < s.length; i++) if (d(s[i].date) - d(s[i-1].date) > tol) out.push([d(s[i-1].date), d(s[i].date)]);
@@ -625,7 +636,8 @@ function renderTimeline(loading) {
     st(t('st.mal'), mal, '', mal ? 'alert' : ''),
   ].join('');
 
-  if (!L.lanes.length) { $('tl').innerHTML = `<div class="empty-tl" style="grid-column:1/-1">${S.selectedId ? (loading ? '…' : t('tl.empty')) : t('tl.nolist')}</div>`; return; }
+  const selJob = S.pivot === 'job' && byId(S.inv.jobs, S.selectedId);
+  if (!L.lanes.length) { $('tl').innerHTML = `<div class="empty-tl" style="grid-column:1/-1">${selJob && selJob.noChain ? t('tl.nochain') : S.selectedId ? (loading ? '…' : t('tl.empty')) : t('tl.nolist')}</div>`; return; }
   const dayCells = withText => { let s = ''; for (let i = 0; i <= S.days; i++) { const v = new Date(start.getTime() + i * DAY); const wk = v.getDay() === 0 || v.getDay() === 6, first = i === 0 || v.getDate() === 1, today = v.toDateString() === TODAY.toDateString(); s += `<div class="day ${wk ? 'wk' : ''} ${first ? 'm' : ''} ${today ? 'today' : ''}" style="left:${i * PX}px;width:${PX}px">${withText ? (first ? `<b>${v.toLocaleDateString(LOCALE[LANG], { month:'short' })}</b>` : '') + (today ? '●' : v.getDate()) : ''}</div>`; } return s; };
   let h = `<div class="axis lbl">${tp('k.lanes',{n:L.lanes.length})}</div><div class="axis"><div class="days" style="width:${width}px">${dayCells(true)}</div></div>`;
   L.lanes.forEach(l => {
@@ -679,10 +691,10 @@ function renderDetail() {
   <div class="dh"><div class="eyebrow">${t('d.rp')} · ${label(r)}</div><h2>${esc(vm.name)} <span class="dim">·</span> ${fmtDT(r.date)}</h2>
     <div class="pills">${isFull ? '<span class="pill full">Full</span>' : ''}${r.gfs ? `<span class="pill gfs">GFS ${esc(r.gfs)}</span>` : ''}${r.immUntil && d(r.immUntil) > TODAY ? `<span class="pill ok">${tp('d.imm',{d:fmtD(r.immUntil)})}</span>` : `<span class="pill">${t('d.noimm')}</span>`}${r.mal !== 'Clean' ? `<span class="pill bad">${t('d.malbad')}</span>` : `<span class="pill ok">${t('d.malok')}</span>`}</div></div>
   <dl class="kv">
-    <dt>${t('d.job')}</dt><dd>${esc(j.name)} <span class="dim">· ${esc(j.kind)}</span></dd>
+    <dt>${t('d.job')}</dt><dd>${esc(j.name)} <span class="dim">· ${esc(kindLabel(j))}</span></dd>
     <dt>${t('d.repo')}</dt><dd>${esc(repo.name)} <span class="dim">· ${esc(repo.type)}</span></dd>
     <dt>${t('d.file')}</dt><dd class="mono" style="font-size:12px">${esc(r.file || '—')}</dd>
-    <dt>${t('d.platform')}</dt><dd>${esc(vm.platform || '—')}${vm.os ? ' · ' + esc(vm.os) : ''}</dd>
+    <dt>${t('d.platform')}</dt><dd>${esc(r.platform || vm.platform || '—')}${(vm.os || r.guestOs) ? ' · ' + esc(vm.os || r.guestOs) : ''}</dd>
     <dt>restorePointId</dt><dd class="mono" style="font-size:12px">${esc(r.id)}</dd>
     <dt>backupFileId</dt><dd class="mono" style="font-size:12px">${esc(r.backupFileId || '—')}</dd>
   </dl>
@@ -706,7 +718,7 @@ function renderDetail() {
 
 function aaBlock(r, j, vm) {
   const cfg = j.aaip || { on:null }, res = r.aaip;
-  if (cfg.on === null || cfg.on === undefined) return `<div class="dsec"><h4>${t('d.aa')}</h4><div class="note">${tp('d.aa.inherit',{kind:esc(j.kind)})}</div></div>`;
+  if (cfg.on === null || cfg.on === undefined) return `<div class="dsec"><h4>${t('d.aa')}</h4><div class="note">${tp('d.aa.inherit',{kind:esc(kindLabel(j))})}</div></div>`;
   const lab = res ? t('aa.' + res) : t('aa.none');
   const pill = { ok:'ok', warn:'gfs', fail:'bad', off:'' }[res] || '';
   const logs = logMins(j, vm);

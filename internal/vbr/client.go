@@ -156,16 +156,17 @@ func Get(ctx context.Context, s *Session, path string) (json.RawMessage, error) 
 	if s.Demo {
 		return demoResponse(path), nil
 	}
-	if !cacheable(path) {
-		return fetchOnce(ctx, s, path)
+	if cacheable(path) {
+		if body, ok := s.cacheGet(path); ok {
+			dbg.Logf("GET %s -> cached (%dB)", path, len(body))
+			s.addTrace(TraceEntry{At: time.Now(), Path: path, Status: 200, Bytes: len(body), Cached: true})
+			return body, nil
+		}
 	}
-	if body, ok := s.cacheGet(path); ok {
-		dbg.Logf("GET %s -> cached (%dB)", path, len(body))
-		s.addTrace(TraceEntry{At: time.Now(), Path: path, Status: 200, Bytes: len(body), Cached: true})
-		return body, nil
-	}
-	// Single-flight: si otra request ya esta trayendo este path, esperamos su
-	// resultado en vez de pedirlo de nuevo (v1/jobs tarda 19 s en un VBR cargado).
+	// Single-flight para TODAS las rutas (cacheables o no): si otra request ya esta
+	// trayendo este path, esperamos su resultado en vez de pedirlo de nuevo. En el
+	// campo se vieron 5 GET identicos a /backupObjects/{id}/restorePoints en el
+	// mismo segundo (carriles en paralelo + detalle): uno alcanza.
 	call, lead := s.joinOrLead(path)
 	if !lead {
 		dbg.Logf("GET %s -> waiting for the in-flight request", path)
@@ -173,14 +174,15 @@ func Get(ctx context.Context, s *Session, path string) (json.RawMessage, error) 
 		return call.body, call.err
 	}
 	body, err := fetchOnce(ctx, s, path)
-	if err == nil {
-		s.cachePut(path, body)
-	} else if stale, ok := s.cacheGetStale(path); ok {
-		// The fetch failed but an older copy exists: job/infrastructure config
-		// changes slowly, so data from minutes ago beats an empty diagram and an
-		// empty job selector.
-		log.Printf("REST GET %s: failed (%v) — serving the previous copy", path, err)
-		body, err = stale, nil
+	if cacheable(path) {
+		if err == nil {
+			s.cachePut(path, body)
+		} else if stale, ok := s.cacheGetStale(path); ok {
+			// The fetch failed but an older copy exists: job/infrastructure config
+			// changes slowly, so data from minutes ago beats an empty list.
+			log.Printf("REST GET %s: failed (%v) — serving the previous copy", path, err)
+			body, err = stale, nil
+		}
 	}
 	s.leadDone(path, call, body, err)
 	return body, err

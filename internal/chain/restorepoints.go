@@ -17,37 +17,55 @@ import (
 // unen los BackupFileModel (compresion, dedup, GFS, nombre de archivo) por
 // backupFileId.
 func RestorePoints(ctx context.Context, s *vbr.Session, inv *Inventory, pivot, id string, since time.Time) ([]RestorePoint, error) {
-	// 1) que backupObjects hay que consultar
+	// 1) que backupObjects hay que consultar (sin duplicados: un mismo objeto puede
+	//    llegar por varios caminos y cada GET repetido es una llamada real a VBR)
 	var objectIDs []string
+	seenObj := map[string]bool{}
+	addObj := func(oid string) {
+		if oid != "" && !seenObj[oid] {
+			seenObj[oid] = true
+			objectIDs = append(objectIDs, oid)
+		}
+	}
+	keep := func(rp RestorePoint) bool { return true }
 	switch pivot {
 	case "job":
 		j := inv.Job(id)
 		if j == nil {
 			return nil, &vbr.APIError{Status: 404, Message: "Job not found"}
 		}
+		if j.NoChain {
+			return nil, nil
+		}
 		for _, w := range inv.VMs {
 			if contains(w.JobIDs, j.ID) {
 				for _, oid := range w.ObjectIDs {
-					if contains(j.BackupIDs, objectBackup(ctx, s, inv, oid)) {
-						objectIDs = append(objectIDs, oid)
+					if contains(j.BackupIDs, inv.objectBackup[oid]) {
+						addObj(oid)
 					}
 				}
 			}
 		}
+		// FIELD: /backupObjects/{id}/restorePoints puede devolver RPs de OTROS backups
+		// (copias, otra cadena del mismo objeto): nos quedamos con los del job.
+		keep = func(rp RestorePoint) bool { return contains(j.BackupIDs, rp.BackupID) }
 	case "vm":
 		w := inv.VM(id)
 		if w == nil {
 			return nil, &vbr.APIError{Status: 404, Message: "Workload not found"}
 		}
-		objectIDs = w.ObjectIDs
+		for _, oid := range w.ObjectIDs {
+			addObj(oid)
+		}
 	case "repo":
 		for _, w := range inv.VMs {
 			for _, oid := range w.ObjectIDs {
-				if inv.backupRepo[objectBackup(ctx, s, inv, oid)] == id {
-					objectIDs = append(objectIDs, oid)
+				if inv.backupRepo[inv.objectBackup[oid]] == id {
+					addObj(oid)
 				}
 			}
 		}
+		keep = func(rp RestorePoint) bool { return rp.RepoID == id }
 	default:
 		return nil, &vbr.APIError{Status: 400, Message: "pivot must be job, vm or repo"}
 	}
@@ -77,6 +95,7 @@ func RestorePoints(ctx context.Context, s *vbr.Session, inv *Inventory, pivot, i
 	// 3) archivos de backup por backup (cacheados en la sesion por vbr.Get)
 	files := map[string]obj{}
 	seenBackup := map[string]bool{}
+	seenRP := map[string]bool{}
 	var out []RestorePoint
 	for _, r := range results {
 		if r.err != nil {
@@ -95,24 +114,16 @@ func RestorePoints(ctx context.Context, s *vbr.Session, inv *Inventory, pivot, i
 					files[str(bf, "id")] = bf
 				}
 			}
-			out = append(out, mapRP(inv, raw, inv.objectVM[r.oid], files[str(raw, "backupFileId")]))
+			rp := mapRP(inv, raw, inv.objectVM[r.oid], files[str(raw, "backupFileId")])
+			if !keep(rp) || seenRP[rp.ID] {
+				continue
+			}
+			seenRP[rp.ID] = true
+			out = append(out, rp)
 		}
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Date < out[b].Date })
 	return out, nil
-}
-
-// objectBackup: backupId de un backupObject (lo guarda el inventario al listar
-// objetos; si falta, se pregunta a la API).
-func objectBackup(ctx context.Context, s *vbr.Session, inv *Inventory, oid string) string {
-	if b, ok := inv.objectBackup[oid]; ok {
-		return b
-	}
-	o, err := getObj(ctx, s, "v1/backupObjects/"+oid)
-	if err != nil {
-		return ""
-	}
-	return str(o, "backupId")
 }
 
 // RestorePoint trae un RP puntual (para el detalle), con su BackupFile.
@@ -151,6 +162,9 @@ func mapRP(inv *Inventory, raw obj, vmID string, bf obj) RestorePoint {
 		kind = job.Kind
 	}
 	platform := inv.backupPlatform[bid]
+	if platform == "" {
+		platform = str(raw, "platformName")
+	}
 
 	// tipo: la API da Increment/Full; sintetico vs activo lo refina Aaip() con
 	// taskSession.algorithm cuando se pide el detalle.
@@ -202,22 +216,22 @@ func mapRP(inv *Inventory, raw obj, vmID string, bf obj) RestorePoint {
 		BackupFileID: str(raw, "backupFileId"), Date: created, Type: rtype, Full: str(raw, "type") == "Full" || rtype == "tape", GFS: gfs,
 		SizeGB: toGB(bf, "backupSize"), DataSize: data,
 		CompressRatio: ratio(num(bf, "compressRatio")), DedupRatio: ratio(num(bf, "dedupRatio")),
-		ImmUntil: imm, Mal: mal, File: str(bf, "name"), AllowedOperations: strs(raw, "allowedOperations"),
+		ImmUntil: imm, Mal: mal, File: strings.TrimSpace(str(bf, "name")), AllowedOperations: strs(raw, "allowedOperations"),
+		Platform: str(raw, "platformName"), GuestOS: str(raw, "guestOsFamily"),
 		SessionID: str(raw, "sessionId"),
 	}
 }
 
-// ratio: BackupFileModel expone dedupRatio/compressRatio como enteros. En la UI
-// de VBR se ven como "1.3x"; asumimos porcentaje (130) si el valor es grande y
-// factor (1.3) si es chico.  // LAB
+// ratio: BackupFileModel expone dedupRatio/compressRatio como enteros que son el
+// PORCENTAJE DEL TAMANO QUE QUEDA despues de cada etapa (FIELD, vbr-03:
+// compress 65 + dedup 93 con dataSize 20.3 GB -> backupSize 12.5 GB = 61 %;
+// compress 63 + dedup 25 -> 16 %). Factor de reduccion = 100 / valor.
+// 0 = sin dato (archivos placeholder de Nutanix/ABR) -> 1x.
 func ratio(v float64) float64 {
-	switch {
-	case v <= 0:
+	if v <= 0 {
 		return 1
-	case v > 20:
-		return v / 100
 	}
-	return v
+	return 100 / v
 }
 
 // isFullFile: por si el tipo del RP no viene, la extension del archivo lo dice.

@@ -46,7 +46,7 @@ type demoRP struct {
 	synthetic                              bool
 	gfs                                    []string
 	dataGB, backupGB                       float64
-	dedup, compress                        int // porcentaje, como los expone BackupFileModel
+	dedup, compress                        int // % del tamano que queda tras cada etapa (FIELD, como BackupFileModel)
 	malware                                string
 	aaip, aaipTitle                        string // "" = no aplica
 }
@@ -102,13 +102,13 @@ func demoBuild() {
 		"oracle": map[string]any{"useGuestCredentials": false, "credentialsId": "cred-oracle-sysdba", "archiveLogs": "DeleteExpiredHours",
 			"deleteHoursCount": 24, "backupLogs": true, "backupMinsCount": 15, "retainLogBackups": "KeepOnlyDays", "keepDaysCount": 14}}}}
 	demoJobs = []demoJob{
-		{"j1", "BKP-SQL-PROD", "Backup", "r1", "Optimal", "1MB", true, gfs(4, 12, 0), []string{"v1", "v2", "v3"}, sqlAA, 22},
-		{"j2", "BKP-APP-TIER", "Backup", "r2", "Optimal", "1MB", false, gfs(4, 0, 0), []string{"v4", "v5", "v6", "v7"}, pgAA, 23},
-		{"j3", "BKP-INFRA-CORE", "Backup", "r2", "High", "1MB", false, gfs(0, 0, 0), []string{"v8", "v9", "v10"}, adAA, 1},
-		{"j4", "BKP-VDI-POOL", "Backup", "r2", "Optimal", "512KB", false, gfs(0, 0, 0), []string{"v11", "v12"}, map[string]any{"isEnabled": false}, 22},
+		{"j1", "BKP-SQL-PROD", "VSphereBackup", "r1", "Optimal", "1MB", true, gfs(4, 12, 0), []string{"v1", "v2", "v3"}, sqlAA, 22},
+		{"j2", "BKP-APP-TIER", "VSphereBackup", "r2", "Optimal", "1MB", false, gfs(4, 0, 0), []string{"v4", "v5", "v6", "v7"}, pgAA, 23},
+		{"j3", "BKP-INFRA-CORE", "VSphereBackup", "r2", "High", "1MB", false, gfs(0, 0, 0), []string{"v8", "v9", "v10"}, adAA, 1},
+		{"j4", "BKP-VDI-POOL", "HyperVBackup", "r2", "Optimal", "512KB", false, gfs(0, 0, 0), []string{"v11", "v12"}, map[string]any{"isEnabled": false}, 22},
 		{"j5", "COPY-SQL-PROD-S3", "BackupCopy", "r3", "Optimal", "1MB", true, gfs(0, 12, 3), []string{"v1", "v2", "v3"}, nil, 22},
 		{"j6", "TAPE-WEEKLY-ALL", "BackupToTape", "r4", "None", "", true, gfs(0, 0, 7), []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v13", "v14"}, nil, 6},
-		{"j7", "BKP-ORA-ERP", "Backup", "r1", "DedupFriendly", "1MB", true, gfs(4, 12, 1), []string{"v13", "v14"}, oraAA, 21},
+		{"j7", "BKP-ORA-ERP", "VSphereBackup", "r1", "DedupFriendly", "1MB", true, gfs(4, 12, 1), []string{"v13", "v14"}, oraAA, 21},
 	}
 
 	seed := uint32(7)
@@ -124,7 +124,7 @@ func demoBuild() {
 		demoRPs = append(demoRPs, demoRP{
 			id: fmt.Sprintf("rp-%05d", n), job: j.id, vm: vm.id, backupFile: fmt.Sprintf("bf-%05d", n),
 			session: fmt.Sprintf("ses-%05d", n), task: fmt.Sprintf("ts-%05d", n), date: date, rpType: rpType, synthetic: synthetic,
-			gfs: gfsP, dataGB: dataGB, backupGB: dataGB / (comp * dedup), dedup: int(dedup*100 + .5), compress: int(comp*100 + .5),
+			gfs: gfsP, dataGB: dataGB, backupGB: dataGB / (comp * dedup), dedup: int(100/dedup + .5), compress: int(100/comp + .5),
 			malware: malware, aaip: aaip, aaipTitle: aaipTitle,
 		})
 	}
@@ -258,6 +258,7 @@ func demoResponse(path string) json.RawMessage {
 		for _, j := range demoJobs {
 			out = append(out, map[string]any{"id": j.id, "name": j.name, "type": j.typ, "isDisabled": false})
 		}
+		out = append(out, map[string]any{"id": "j-sure", "name": "SureBackup-Malware-Scan", "type": "SureBackupContentScan", "isDisabled": false})
 		return demoPage(out, qs)
 	case len(parts) == 2 && parts[0] == "jobs":
 		for _, j := range demoJobs {
@@ -269,6 +270,9 @@ func demoResponse(path string) json.RawMessage {
 		return demoPage(demoRepos, qs)
 	case p == "v1/backupInfrastructure/repositories/states":
 		return demoPage(demoState, qs)
+	case p == "v1/backupInfrastructure/scaleOutRepositories":
+		return demoPage([]map[string]any{{"id": "sobr-1", "name": "SOBR-PROD", "description": "demo",
+			"performanceTier": map[string]any{"performanceExtents": []any{map[string]any{"id": "r2", "name": "SOBR-PROD-WIN"}}}}}, qs)
 	case p == "v1/backups":
 		out := []map[string]any{}
 		for _, j := range demoJobs {
@@ -391,8 +395,11 @@ func demoJobDetail(j demoJob) map[string]any {
 
 func demoBackup(j demoJob) map[string]any {
 	platform := "VMware"
-	if j.typ == "BackupToTape" {
+	switch j.typ {
+	case "BackupToTape":
 		platform = "Tape"
+	case "HyperVBackup":
+		platform = "HyperV"
 	}
 	return map[string]any{"id": "bk-" + j.id, "name": j.name, "jobId": j.id, "repositoryId": j.repo, "platformName": platform,
 		"jobType": j.typ, "creationTime": time.Now().AddDate(0, 0, -70).Format(time.RFC3339)}
