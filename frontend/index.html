@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yoga Chain for Veeam</title>
+<style>
+  /* Open Sans (fuente de marca web de Veeam), embebida y servida localmente.
+     Copiar frontend/opensans.woff2 desde yogabench; si falta, cae al stack del sistema. */
+  @font-face{
+    font-family:'Open Sans'; font-style:normal; font-weight:400 700;
+    font-display:swap; src:url('opensans.woff2') format('woff2');
+  }
+  :root{
+    --bg:#15171c; --panel:#1c1f27; --panel2:#232733; --border:#2b2f3b;
+    --text:#e6e8ec; --muted:#8b909c; --green:#54b948; --green-d:#3f9636;
+    --blue:#3a8ee6; --amber:#e0a020; --red:#e05656;
+    --topbar:#12141a; --sidebar:#181b22;
+    /* tipos de restore point */
+    --full:#3a8ee6; --inc:#2f5d94; --synth:#5aa0ea; --copy:#9aa4b5; --gfs:#e0a020;
+    --ok-soft:rgba(84,185,72,.18); --warn-soft:rgba(224,160,32,.18); --bad-soft:rgba(224,86,86,.18); --blue-soft:rgba(58,142,230,.18);
+    --weekend:#191c23; --gap:rgba(224,86,86,.16);
+  }
+  * { box-sizing:border-box; }
+  body { font-family:'Open Sans', -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); margin:0; font-size:14px; }
+  h3 { margin:0 0 8px; font-weight:600; font-size:16px; }
+  h4 { margin:14px 0 4px; font-weight:600; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .muted { color:var(--muted); }
+  button { padding:9px 16px; border:none; border-radius:6px; background:var(--green); color:#0e1a0b; font-weight:600; cursor:pointer; font-size:14px; }
+  button:hover { background:var(--green-d); color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  button.ghost { background:var(--panel2); color:var(--text); border:1px solid var(--border); font-weight:500; }
+  button.ghost:hover { background:#2c313d; }
+  button.mini { padding:5px 12px; font-size:13px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  input, select { padding:8px; border:1px solid var(--border); border-radius:6px; font-size:14px; width:180px; background:var(--panel2); color:var(--text); }
+  input::placeholder { color:#5c6270; }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--green); outline-offset:1px; }
+
+  /* --- topbar --- */
+  .topbar { height:52px; background:var(--topbar); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; padding:0 18px; position:sticky; top:0; z-index:10; gap:16px; }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:15px; white-space:nowrap; }
+  .brand .logo { width:22px; height:22px; border-radius:5px; background:var(--green); display:inline-grid; place-items:center; }
+  .brand .logo svg { width:15px; height:15px; stroke:#0e1a0b; fill:none; stroke-width:2.4; stroke-linecap:round; }
+  .topright { display:flex; align-items:center; gap:12px; font-size:13px; color:var(--muted); }
+  .langs { display:inline-flex; gap:6px; align-items:center; }
+  .flag { padding:0; background:none; border:2px solid transparent; border-radius:4px; cursor:pointer; line-height:0; }
+  .flag:hover { border-color:#3a3f4d; background:none; }
+  .flag.active { border-color:var(--green); }
+  .flag svg { display:block; width:24px; height:16px; border-radius:2px; }
+  .conn { display:flex; align-items:center; gap:8px; }
+  .conn .dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 0 3px var(--ok-soft); }
+  .ro { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:3px 9px; white-space:nowrap; }
+
+  /* --- layout --- */
+  .app { display:grid; grid-template-columns:270px 1fr 330px; height:calc(100vh - 52px); }
+  @media (max-width:1150px){ .app { grid-template-columns:240px 1fr; } .detail { display:none; } }
+
+  /* --- conexion (card en el main cuando no hay sesion) --- */
+  .connect-card { max-width:760px; margin:40px auto; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px; margin-bottom:16px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .err { color:var(--red); font-size:13px; min-height:18px; margin-top:8px; }
+  .hint { color:var(--muted); font-size:12.5px; line-height:1.5; margin-top:10px; }
+
+  /* --- rail --- */
+  .rail { background:var(--sidebar); border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0; }
+  .pivots { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:12px 12px 8px; }
+  .pivots button { padding:8px 4px; border-radius:6px; background:none; color:var(--muted); font-size:12px; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .pivots button svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .pivots button.on { background:var(--ok-soft); color:var(--green); }
+  .pivots button:hover:not(.on) { background:var(--panel2); color:var(--text); }
+  .rail .search { margin:0 12px 8px; display:flex; align-items:center; gap:8px; background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--muted); }
+  .rail .search input { border:0; background:none; flex:1; width:auto; padding:0; color:var(--text); font-size:13px; outline:none; }
+  .rail h3 { margin:6px 16px 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; display:flex; justify-content:space-between; }
+  .rail h3 span { font-weight:400; letter-spacing:0; text-transform:none; }
+  .list { overflow:auto; padding:0 8px 12px; flex:1; }
+  .item { width:100%; text-align:left; display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:8px 10px; border-radius:6px; align-items:center; background:none; color:var(--text); font-weight:500; }
+  .item:hover { background:var(--panel2); color:var(--text); }
+  .item.on { background:var(--blue-soft); }
+  .item .n { font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .s { grid-column:1; color:var(--muted); font-size:12px; font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .c { grid-row:1/3; color:var(--muted); font-size:12px; font-weight:400; }
+  .badge { display:inline-block; font-size:10.5px; padding:1px 6px; border-radius:4px; background:var(--panel2); color:var(--muted); vertical-align:1px; margin-left:6px; font-weight:600; }
+  .badge.bad { background:var(--bad-soft); color:var(--red); }
+  .badge.gfs { background:var(--warn-soft); color:var(--amber); }
+  .badge.app { background:var(--ok-soft); color:var(--green); font-family:ui-monospace,monospace; }
+  .rail .foot { padding:10px 16px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; display:flex; justify-content:space-between; align-items:center; }
+
+  /* --- main --- */
+  .main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .head { padding:14px 18px 8px; display:flex; flex-direction:column; gap:10px; }
+  .crumb { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .crumb b { color:var(--text); font-weight:600; font-size:17px; }
+  .crumb .sep { opacity:.6; }
+  .loading { font-size:11px; color:var(--green); background:var(--ok-soft); border-radius:999px; padding:2px 8px; }
+  .stats { display:flex; gap:8px; flex-wrap:wrap; }
+  .stat { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:1px; min-width:104px; }
+  .stat .k { font-size:11px; color:var(--muted); letter-spacing:.04em; text-transform:uppercase; }
+  .stat .v { font-size:17px; font-weight:600; }
+  .stat .v small { font-size:12px; font-weight:400; color:var(--muted); margin-left:3px; }
+  .stat.alert { border-color:var(--red); background:var(--bad-soft); } .stat.alert .v { color:var(--red); }
+  .stat.warn { border-color:var(--amber); } .stat.warn .v { color:var(--amber); }
+  .stat.hi { border-color:var(--green); background:var(--ok-soft); } .stat.hi .v { color:var(--green); }
+
+  .legend { display:flex; gap:14px; padding:0 18px 8px; color:var(--muted); font-size:12px; flex-wrap:wrap; align-items:center; }
+  .legend span { display:flex; align-items:center; gap:6px; }
+  .legend .sep { width:1px; height:16px; background:var(--border); }
+  .modes { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .modes button { padding:3px 10px; background:none; color:var(--muted); font-size:12px; font-weight:600; border-radius:0; }
+  .modes button.on { background:var(--blue-soft); color:var(--blue); }
+  .modes button:hover:not(.on) { background:var(--panel2); color:var(--text); }
+  .sw { width:12px; height:12px; border-radius:3px; display:inline-block; background:var(--inc); flex:none; }
+  .sw.full { background:var(--full); }
+  .sw.inc { width:8px; height:8px; border-radius:2px; }
+  .sw.synth { background:repeating-linear-gradient(45deg,var(--synth) 0 2px,transparent 2px 4px); border:1px solid var(--synth); }
+  .sw.gfs { background:var(--full); box-shadow:0 0 0 2px var(--gfs); }
+  .sw.copy { background:var(--copy); border-radius:50%; }
+  .sw.tape { background:none; border:2px solid var(--copy); border-radius:50%; }
+  .sw.mal { background:var(--red); clip-path:polygon(50% 0,100% 100%,0 100%); border-radius:0; }
+  .sw.gap { background:var(--gap); border:1px dashed var(--red); }
+  .sw.imm { background:var(--green); border-radius:50%; width:8px; height:8px; }
+  .sw.aaok { background:var(--ok-soft); border:2px solid var(--green); }
+  .sw.aafail { background:var(--bad-soft); border:2px dashed var(--red); }
+  .sw.logs { width:1px; height:10px; background:var(--green); border-radius:0; }
+
+  .tl-wrap { flex:1; margin:0 18px 18px; background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
+  .tl-scroll { overflow:auto; flex:1; }
+  .tl { display:grid; grid-template-columns:250px max-content; }
+  .lbl { position:sticky; left:0; z-index:2; background:var(--panel); border-right:1px solid var(--border); padding:0 14px; display:flex; flex-direction:column; justify-content:center; gap:1px; border-bottom:1px solid var(--border); }
+  .lbl .n { font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:36px; }
+  .lbl .s { color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:36px; }
+  .lbl .cnt { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:11px; }
+  .axis { position:sticky; top:0; z-index:3; background:var(--panel); border-bottom:1px solid var(--border); height:44px; }
+  .axis.lbl { z-index:4; justify-content:flex-end; padding-bottom:6px; color:var(--muted); font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+  .days { position:relative; height:44px; }
+  .day { position:absolute; top:0; bottom:0; border-left:1px solid var(--border); font-size:11px; color:var(--muted); padding:4px 0 0 5px; }
+  .day.wk { background:var(--weekend); }
+  .day.m b { display:block; font-weight:600; color:var(--text); }
+  .day.today { border-left:2px solid var(--green); color:var(--green); font-weight:600; }
+  .lane { position:relative; height:52px; border-bottom:1px solid var(--border); }
+  .lane .day { padding:0; font-size:0; }
+  .gaprect { position:absolute; top:8px; bottom:8px; background:var(--gap); border:1px dashed var(--red); border-radius:4px; }
+  .logband { position:absolute; top:38px; height:7px; background-image:linear-gradient(to right,var(--green) 0 1px,transparent 1px); background-repeat:repeat-x; opacity:.7; }
+  .rp { position:absolute; top:50%; transform:translate(-50%,-50%); width:12px; height:12px; border-radius:3px; background:var(--inc); padding:0; border:0; transition:transform .08s; }
+  .rp:hover { background:var(--inc); }
+  .rp.inc { width:9px; height:9px; border-radius:2px; }
+  .rp.full { background:var(--full); width:14px; height:14px; }
+  .rp.synth { background:repeating-linear-gradient(45deg,var(--synth) 0 2px,var(--panel) 2px 4px); border:1.5px solid var(--synth); width:14px; height:14px; }
+  .rp.gfs { box-shadow:0 0 0 2.5px var(--gfs); }
+  .rp.copy { background:var(--copy); border-radius:50%; width:11px; height:11px; }
+  .rp.copy.full { width:14px; height:14px; }
+  .rp.tape { background:none; border:2px solid var(--copy); border-radius:50%; width:11px; height:11px; }
+  .rp.mal { background:var(--red); border:0; border-radius:0; clip-path:polygon(50% 0,100% 100%,0 100%); width:14px; height:13px; box-shadow:none; }
+  .rp.imm::after { content:""; position:absolute; right:-5px; bottom:-5px; width:7px; height:7px; border-radius:50%; background:var(--green); border:1.5px solid var(--panel); }
+  .rp.eff { border-radius:50%; }
+  .rp.aa { background:var(--panel2); border:2px solid var(--muted); box-shadow:none; }
+  .rp.aa-ok { background:var(--ok-soft); border-color:var(--green); }
+  .rp.aa-warn { background:var(--warn-soft); border-color:var(--amber); }
+  .rp.aa-fail { background:var(--bad-soft); border-color:var(--red); border-style:dashed; }
+  .rp.aa-off { background:var(--panel); border-color:var(--border); opacity:.6; }
+  .rp:hover { transform:translate(-50%,-50%) scale(1.35); z-index:2; }
+  .rp.sel { outline:2px solid var(--green); outline-offset:2px; z-index:2; }
+  .tip { position:fixed; z-index:50; pointer-events:none; background:#0e1014; color:var(--text); border:1px solid var(--border); padding:6px 9px; border-radius:6px; font-size:12px; white-space:nowrap; opacity:0; transform:translate(-50%,-110%); transition:opacity .08s; line-height:1.4; }
+  .tip.show { opacity:1; }
+  .tip .warnt { color:var(--red); }
+  .empty-tl { padding:40px; color:var(--muted); text-align:center; }
+
+  /* --- detalle --- */
+  .detail { background:var(--sidebar); border-left:1px solid var(--border); display:flex; flex-direction:column; min-height:0; overflow:auto; }
+  .detail .empty { padding:40px 24px; color:var(--muted); text-align:center; font-size:13px; line-height:1.5; }
+  .detail .empty svg { width:40px; height:40px; stroke:var(--border); fill:none; stroke-width:1.5; margin-bottom:10px; }
+  .dh { padding:16px 18px 12px; border-bottom:1px solid var(--border); }
+  .eyebrow, .dsec h4, .actions h4 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0; }
+  .dh h2 { margin:4px 0 8px; font-size:16px; font-weight:600; line-height:1.3; }
+  .dim { color:var(--muted); font-weight:400; }
+  .pills { display:flex; gap:6px; flex-wrap:wrap; }
+  .pill { font-size:11.5px; padding:3px 8px; border-radius:999px; background:var(--panel2); color:var(--text); }
+  .pill.full { background:var(--full); color:#fff; }
+  .pill.gfs { background:var(--warn-soft); color:var(--amber); }
+  .pill.ok { background:var(--ok-soft); color:var(--green); }
+  .pill.bad { background:var(--bad-soft); color:var(--red); }
+  .kv { padding:12px 18px; margin:0; display:grid; grid-template-columns:auto 1fr; gap:7px 14px; font-size:13px; border-bottom:1px solid var(--border); }
+  .kv dt { color:var(--muted); } .kv dd { margin:0; overflow-wrap:anywhere; }
+  .dsec { padding:12px 18px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:8px; }
+  .chain { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+  .chain .c { width:16px; height:16px; border-radius:3px; background:var(--inc); opacity:.6; }
+  .chain .c.full { background:var(--full); opacity:1; }
+  .chain .c.here { outline:2px solid var(--green); outline-offset:1px; opacity:1; }
+  .chain .arrow { color:var(--muted); font-size:11px; }
+  .note { color:var(--muted); font-size:12px; line-height:1.45; }
+  .loc { display:flex; flex-direction:column; gap:6px; }
+  .loc div { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .loc .when { margin-left:auto; color:var(--muted); font-size:12px; }
+  .effbar { display:grid; gap:6px; }
+  .effbar .row { display:grid; grid-template-columns:70px 1fr auto; align-items:center; gap:8px; font-size:12px; }
+  .effbar .row .k { color:var(--muted); }
+  .effbar .bar { height:10px; background:var(--panel2); border-radius:5px; overflow:hidden; }
+  .effbar .bar i { display:block; height:100%; border-radius:5px; background:var(--muted); }
+  .effbar .bar i.disk { background:var(--green); }
+  .effbar .ratios { display:flex; gap:6px; margin-top:2px; flex-wrap:wrap; }
+  .aa-grid { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; font-size:12.5px; }
+  .aa-grid .k { color:var(--muted); }
+  .optlist { display:flex; flex-direction:column; gap:5px; }
+  .optlist div { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .optlist .ok { color:var(--green); } .optlist .no { color:var(--muted); text-decoration:line-through; }
+  .optlist svg { width:14px; height:14px; flex:none; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .actions { padding:12px 18px; display:grid; gap:6px; }
+  .actions button { padding:8px 10px; border:1px solid var(--border); border-radius:6px; text-align:left; color:var(--muted); display:flex; justify-content:space-between; font-size:13px; background:var(--panel2); font-weight:500; }
+  .actions button span { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; }
+  @media (prefers-reduced-motion: reduce){ .rp, .tip { transition:none; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="logo"><svg viewBox="0 0 24 24"><path d="M4 12h4l2-5 4 10 2-5h4"/></svg></span>Yoga Chain for Veeam <span id="brandVer" style="color:var(--muted);font-weight:500;font-size:13px;"></span></div>
+  <div class="topright">
+    <span id="connectedAs" class="conn"></span>
+    <button class="ghost mini" id="btnDiag" onclick="downloadDiagnostics()" style="display:none;" data-i18n="btn.diag" title="JSON con version, sesion, inventario, muestras de la API y traza REST">Diagnóstico</button>
+    <button class="ghost mini" id="btnDisconnect" onclick="disconnect()" style="display:none;" data-i18n="btn.disconnect">Desconectar</button>
+    <span class="ro" data-i18n="brand.ro">solo lectura</span>
+    <span class="langs">
+      <button class="flag" data-lang="es" onclick="setLang('es')" title="Español"><svg viewBox="0 0 3 2"><rect width="3" height="2" fill="#c60b1e"/><rect y=".5" width="3" height="1" fill="#ffc400"/></svg></button>
+      <button class="flag" data-lang="en" onclick="setLang('en')" title="English"><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#012169"/><path d="M0 0l60 40M60 0L0 40" stroke="#fff" stroke-width="8"/><path d="M0 0l60 40M60 0L0 40" stroke="#c8102e" stroke-width="4"/><path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="12"/><path d="M30 0v40M0 20h60" stroke="#c8102e" stroke-width="6"/></svg></button>
+      <button class="flag" data-lang="pt" onclick="setLang('pt')" title="Português"><svg viewBox="0 0 60 42"><rect width="60" height="42" fill="#009c3b"/><path d="M30 5L55 21 30 37 5 21z" fill="#ffdf00"/><circle cx="30" cy="21" r="8" fill="#002776"/></svg></button>
+    </span>
+  </div>
+</div>
+
+<!-- Sin sesion: card de conexion -->
+<div id="connectView" class="connect-card">
+  <div class="card">
+    <h3 data-i18n="conn.title">Conectar a Veeam Backup & Replication</h3>
+    <p class="muted" data-i18n="conn.intro">La consola solo lee la REST API de VBR (rol Backup Viewer alcanza). Las credenciales viven en memoria del proceso y nunca se guardan en disco.</p>
+    <form class="row" onsubmit="connect(); return false;">
+      <div><label data-i18n="form.host">Host / IP del VBR</label><input id="host" placeholder="vbr01.lab.local" autocomplete="off"></div>
+      <div><label data-i18n="form.port">Puerto</label><input id="port" value="9419" style="width:90px"></div>
+      <div><label data-i18n="form.user">Usuario</label><input id="user" placeholder="DOMAIN\backupviewer" autocomplete="username"></div>
+      <div><label data-i18n="form.pass">Password</label><input id="pass" type="password" autocomplete="current-password"></div>
+      <div><label data-i18n="form.apiver">API version</label>
+        <select id="apiv" style="width:190px"><option value="auto" selected data-i18n="conn.apiauto">auto (negocia la más alta)</option><option>1.3-rev2</option><option>1.3-rev1</option><option>1.3-rev0</option><option>1.2-rev1</option></select></div>
+      <div><button type="submit" id="btnConnect" data-i18n="btn.connect">Conectar</button></div>
+      <div><button type="button" class="ghost" id="btnDemo" onclick="connectDemo()" data-i18n="btn.demo">Demo</button></div>
+    </form>
+    <div class="err" id="connErr"></div>
+    <div class="hint" data-i18n-html="conn.hint"></div>
+  </div>
+</div>
+
+<!-- Con sesion: rail + timeline + detalle -->
+<div id="appView" class="app" style="display:none;">
+  <aside class="rail">
+    <div class="pivots" role="tablist">
+      <button class="on" data-pivot="job" role="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg><span data-i18n="pivot.job">Job</span></button>
+      <button data-pivot="vm" role="tab"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8M12 16v5"/></svg><span data-i18n="pivot.vm">Workload</span></button>
+      <button data-pivot="repo" role="tab"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span data-i18n="pivot.repo">Repositorio</span></button>
+    </div>
+    <label class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" data-i18n-placeholder="rail.search" placeholder="Buscar…" aria-label="Buscar"></label>
+    <h3><span id="railTitle" style="font-weight:600;letter-spacing:.08em;text-transform:uppercase">Jobs</span><span id="railCount"></span></h3>
+    <div class="list" id="list"></div>
+    <div class="foot"><span id="pageInfo"></span><button class="ghost mini" onclick="refreshInventory()" data-i18n="btn.refresh">Actualizar</button></div>
+  </aside>
+
+  <main class="main">
+    <div class="head">
+      <div class="crumb" id="crumb"></div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="legend">
+      <span class="modes" role="group"><button class="on" data-mode="type" data-i18n="mode.type">Tipo</button><button data-mode="eff" data-i18n="mode.eff">Eficiencia</button><button data-mode="app" data-i18n="mode.app">Aplicación</button></span>
+      <span class="modes" role="group" style="margin-left:4px"><button data-days="14">14d</button><button data-days="30" class="on">30d</button><button data-days="60">60d</button><button data-days="90">90d</button></span>
+      <span class="sep"></span>
+      <span><i class="sw full"></i><span data-i18n="lg.full">Full activo</span></span>
+      <span><i class="sw synth"></i><span data-i18n="lg.synth">Full sintético</span></span>
+      <span><i class="sw inc"></i><span data-i18n="lg.inc">Incremental</span></span>
+      <span><i class="sw gfs"></i>GFS</span>
+      <span><i class="sw copy"></i><span data-i18n="lg.copy">Backup copy</span></span>
+      <span><i class="sw tape"></i>Tape</span>
+      <span><i class="sw mal"></i>Malware</span>
+      <span><i class="sw gap"></i><span data-i18n="lg.gap">Hueco vs. RPO</span></span>
+      <span><i class="sw imm"></i><span data-i18n="lg.imm">Inmutable</span></span>
+      <span class="sep"></span>
+      <span><i class="sw aaok"></i><span data-i18n="lg.appok">App-consistent</span></span>
+      <span><i class="sw aafail"></i><span data-i18n="lg.crash">Crash-consistent</span></span>
+      <span><i class="sw logs"></i><span data-i18n="lg.logs">Log backup</span></span>
+    </div>
+    <div class="tl-wrap"><div class="tl-scroll" id="scroll"><div class="tl" id="tl"></div></div></div>
+  </main>
+
+  <aside class="detail" id="detail"></aside>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+// Servido por el backend -> API en el mismo origen (rutas relativas "/api/...").
+// Si se abre el archivo suelto (file://) no hay origen http valido: caemos al
+// backend local por defecto.
+const BACKEND = location.protocol.startsWith("http") ? "" : "http://localhost:8001";
+let sessionId = null;
+
+// --- i18n (ES / EN / PT) ----------------------------------------------------
+const I18N = {
+  es: {
+    'brand.ro':'solo lectura','conn.none':'Sin conectar','conn.to':'Conectado a {where}',
+    'btn.disconnect':'Desconectar','btn.connect':'Conectar','btn.demo':'Demo','btn.refresh':'Actualizar','btn.diag':'Diagnóstico',
+    'conn.title':'Conectar a Veeam Backup & Replication',
+    'conn.intro':'La consola solo lee la REST API de VBR (rol Backup Viewer alcanza). Las credenciales viven en memoria del proceso y nunca se guardan en disco.',
+    'conn.hint':'<b>Demo</b> levanta una topología simulada con los casos que la UI tiene que mostrar: SQL con log backups, PostgreSQL con malware, Oracle en ARCHIVELOG y NOARCHIVELOG, copia a S3 inmutable y tape semanal.',
+    'form.host':'Host / IP del VBR','form.port':'Puerto','form.user':'Usuario','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negocia la más alta)',
+    'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositorio','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositorios','rail.of':'{n} de {t}',
+    'mode.type':'Tipo','mode.eff':'Eficiencia','mode.app':'Aplicación',
+    'lg.full':'Full activo','lg.synth':'Full sintético','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Hueco vs. RPO','lg.imm':'Inmutable','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
+    'k.job':'Job','k.vm':'Workload','k.repo':'Repositorio','k.lanes':'{n} carriles','k.loading':'cargando {n}/{t}',
+    'st.rps':'Restore points','st.in':'en {d} d','st.fulls':'Fulls','st.incs':'+ {n} inc/copia','st.gfs':'GFS','st.data':'Datos origen','st.disk':'En disco','st.red':'Reducción','st.saves':'ahorra {p}%','st.cd':'Compresión · Dedup','st.w':'ponderado','st.app':'App-consistentes','st.of':'de {t}','st.imm':'Inmutables hoy','st.oldest':'RP más antiguo','st.gaps':'Huecos vs. RPO','st.mal':'Malware',
+    't.inc':'Incremental','t.full':'Full activo','t.synth':'Full sintético','t.copy':'Backup copy','t.tape':'Tape',
+    'sub.rpo':'RPO {h} h','sub.protected':'{n} jobs lo protegen','sub.detected':'{app} detectado','sub.imm':'inmutabilidad {d} días','sub.aaipoff':'AAIP desactivado','sub.logs.sql':'logs SQL cada {m} min','sub.logs.pg':'WAL cada {m} min','sub.logs.ora':'archive logs cada {m} min','sub.idx':'indexación','sub.enc':'cifrado','sub.block':'bloque {b}',
+    'gap.title':'Sin restore point durante {h} h','logs.title':'Log backups cada {m} min',
+    'tl.empty':'Sin restore points en el rango. Probá 60d o 90d.','tl.nolist':'Elegí un job, workload o repositorio a la izquierda.',
+    'd.empty':'Seleccioná un punto de restauración en la línea de tiempo para ver su detalle, la cadena a la que pertenece y en qué otros lugares existe.','d.loading':'Cargando detalle…','d.error':'No se pudo cargar el detalle: {e}',
+    'd.rp':'Restore point','d.job':'Job','d.repo':'Repositorio','d.file':'Archivo','d.platform':'Plataforma','d.noimm':'Sin inmutabilidad','d.imm':'Inmutable hasta {d}','d.malbad':'Malware sospechoso','d.malok':'Escaneo limpio',
+    'd.eff':'Eficiencia de almacenamiento','d.origin':'Origen','d.disk':'En disco','d.total':'{x}× total',
+    'd.eff.low':'Compresión baja: típico de bases de datos ya comprimidas o cifradas. Revisar compressionLevel del job.','d.eff.tape':'Tape: sin compresión ni dedup por software; el ratio lo aporta la unidad.','d.eff.src':'Fuente: GET /backups/{id}/backupFiles → dataSize, backupSize, dedupRatio, compressRatio.',
+    'd.chain':'Cadena ({n} puntos)','d.needed':'Restaurar este punto lee {f} archivo(s) de la cadena, {s} en total.',
+    'd.where':'Dónde existe este dato','d.this':'(este)','d.only1':'Solo existe en un repositorio: sin copia offsite ni tape para esta fecha.',
+    'd.aa':'Application-aware','d.aa.inherit':'{kind}: hereda la consistencia del restore point de origen. Los Explorers pueden abrirse igual desde esta copia.',
+    'aa.ok':'Application-consistent','aa.warn':'Consistente con advertencias','aa.fail':'Crash-consistent (falló VSS)','aa.off':'Crash-consistent (AAIP desactivado)','aa.none':'Sin datos de guest processing',
+    'aa.lastlog':'Último log backup','aa.nologs.ora':'no se respaldan (BD en NOARCHIVELOG o backupLogs=false)',
+    'aa.opts':'Opciones de restore que habilita','aa.gran':'(granularidad {m} min)','aa.nolog':'— sin log backup configurado','aa.noarch':'— BD en NOARCHIVELOG',
+    'aa.idx':'Búsqueda de archivos en el índice guest (guestFSIndexing)','aa.vm':'FLR / Instant Recovery / VM completa',
+    'aa.src':'Fuente: /taskSessions/{id}/logs → "{t}"','aa.src.none':'La API no expone un flag AAIP por RP: se deriva de los logs de la task session. Los Explorers no están en REST; se abren desde consola.',
+    'act.title':'Acciones · fase 2','act.ir':'Instant Recovery','act.flr':'Restauración de archivos (FLR)','act.vm':'Restaurar VM completa','act.disk':'Publicar discos','act.ok':'permitido','act.no':'no disponible','act.note':'Esta fase es solo lectura: la tool nunca modifica VBR. allowedOperations viene del RP.',
+    'app.SQL':['Veeam Explorer for SQL Server','Point-in-time con logs','Restaurar BD a otra instancia'],
+    'app.PostgreSQL':['Veeam Explorer for PostgreSQL','Point-in-time con WAL'],
+    'app.AD':['Veeam Explorer for Active Directory','Objetos, atributos, GPO'],
+    'app.Oracle':['Veeam Explorer for Oracle (restore de BD / PDB)','Point-in-time / por SCN con archive logs','Restaurar a otro host o publicar como Data Guard standby'],
+  },
+  en: {
+    'brand.ro':'read-only','conn.none':'Not connected','conn.to':'Connected to {where}',
+    'btn.disconnect':'Disconnect','btn.connect':'Connect','btn.demo':'Demo','btn.refresh':'Refresh','btn.diag':'Diagnostics',
+    'conn.title':'Connect to Veeam Backup & Replication',
+    'conn.intro':'The console only reads the VBR REST API (the Backup Viewer role is enough). Credentials live in process memory and are never written to disk.',
+    'conn.hint':'<b>Demo</b> starts a simulated topology with every case the UI must show: SQL with log backups, PostgreSQL with malware, Oracle in ARCHIVELOG and NOARCHIVELOG, immutable S3 copy and weekly tape.',
+    'form.host':'VBR host / IP','form.port':'Port','form.user':'Username','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negotiates the highest)',
+    'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repository','rail.search':'Search…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositories','rail.of':'{n} of {t}',
+    'mode.type':'Type','mode.eff':'Efficiency','mode.app':'Application',
+    'lg.full':'Active full','lg.synth':'Synthetic full','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Gap vs. RPO','lg.imm':'Immutable','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
+    'k.job':'Job','k.vm':'Workload','k.repo':'Repository','k.lanes':'{n} lanes','k.loading':'loading {n}/{t}',
+    'st.rps':'Restore points','st.in':'in {d} d','st.fulls':'Fulls','st.incs':'+ {n} inc/copy','st.gfs':'GFS','st.data':'Source data','st.disk':'On disk','st.red':'Reduction','st.saves':'saves {p}%','st.cd':'Compression · Dedup','st.w':'weighted','st.app':'App-consistent','st.of':'of {t}','st.imm':'Immutable today','st.oldest':'Oldest RP','st.gaps':'Gaps vs. RPO','st.mal':'Malware',
+    't.inc':'Incremental','t.full':'Active full','t.synth':'Synthetic full','t.copy':'Backup copy','t.tape':'Tape',
+    'sub.rpo':'RPO {h} h','sub.protected':'protected by {n} jobs','sub.detected':'{app} detected','sub.imm':'immutability {d} days','sub.aaipoff':'AAIP disabled','sub.logs.sql':'SQL logs every {m} min','sub.logs.pg':'WAL every {m} min','sub.logs.ora':'archive logs every {m} min','sub.idx':'indexing','sub.enc':'encrypted','sub.block':'block {b}',
+    'gap.title':'No restore point for {h} h','logs.title':'Log backups every {m} min',
+    'tl.empty':'No restore points in range. Try 60d or 90d.','tl.nolist':'Pick a job, workload or repository on the left.',
+    'd.empty':'Select a restore point on the timeline to see its details, the chain it belongs to and where else it exists.','d.loading':'Loading details…','d.error':'Could not load details: {e}',
+    'd.rp':'Restore point','d.job':'Job','d.repo':'Repository','d.file':'File','d.platform':'Platform','d.noimm':'Not immutable','d.imm':'Immutable until {d}','d.malbad':'Suspicious malware','d.malok':'Scan clean',
+    'd.eff':'Storage efficiency','d.origin':'Source','d.disk':'On disk','d.total':'{x}× total',
+    'd.eff.low':'Low compression: typical of databases that are already compressed or encrypted. Review the job compressionLevel.','d.eff.tape':'Tape: no software compression or dedup; the ratio comes from the drive.','d.eff.src':'Source: GET /backups/{id}/backupFiles → dataSize, backupSize, dedupRatio, compressRatio.',
+    'd.chain':'Chain ({n} points)','d.needed':'Restoring this point reads {f} file(s) of the chain, {s} in total.',
+    'd.where':'Where this data exists','d.this':'(this one)','d.only1':'Exists in a single repository: no offsite copy or tape for this date.',
+    'd.aa':'Application-aware','d.aa.inherit':'{kind}: inherits the consistency of the source restore point. Explorers can still be opened from this copy.',
+    'aa.ok':'Application-consistent','aa.warn':'Consistent with warnings','aa.fail':'Crash-consistent (VSS failed)','aa.off':'Crash-consistent (AAIP disabled)','aa.none':'No guest processing data',
+    'aa.lastlog':'Last log backup','aa.nologs.ora':'not backed up (DB in NOARCHIVELOG or backupLogs=false)',
+    'aa.opts':'Restore options it enables','aa.gran':'({m} min granularity)','aa.nolog':'— no log backup configured','aa.noarch':'— DB in NOARCHIVELOG',
+    'aa.idx':'File search in the guest index (guestFSIndexing)','aa.vm':'FLR / Instant Recovery / entire VM',
+    'aa.src':'Source: /taskSessions/{id}/logs → "{t}"','aa.src.none':'The API exposes no per-RP AAIP flag: it is derived from the task session logs. Explorers are not in REST; open them from the console.',
+    'act.title':'Actions · phase 2','act.ir':'Instant Recovery','act.flr':'File-level restore (FLR)','act.vm':'Restore entire VM','act.disk':'Publish disks','act.ok':'allowed','act.no':'not available','act.note':'This phase is read-only: the tool never modifies VBR. allowedOperations comes from the RP.',
+    'app.SQL':['Veeam Explorer for SQL Server','Point-in-time with logs','Restore DB to another instance'],
+    'app.PostgreSQL':['Veeam Explorer for PostgreSQL','Point-in-time with WAL'],
+    'app.AD':['Veeam Explorer for Active Directory','Objects, attributes, GPOs'],
+    'app.Oracle':['Veeam Explorer for Oracle (DB / PDB restore)','Point-in-time / by SCN with archive logs','Restore to another host or publish as Data Guard standby'],
+  },
+  pt: {
+    'brand.ro':'somente leitura','conn.none':'Sem conexão','conn.to':'Conectado a {where}',
+    'btn.disconnect':'Desconectar','btn.connect':'Conectar','btn.demo':'Demo','btn.refresh':'Atualizar','btn.diag':'Diagnóstico',
+    'conn.title':'Conectar ao Veeam Backup & Replication',
+    'conn.intro':'O console apenas lê a REST API do VBR (a função Backup Viewer é suficiente). As credenciais ficam na memória do processo e nunca são gravadas em disco.',
+    'conn.hint':'<b>Demo</b> inicia uma topologia simulada com todos os casos que a UI precisa mostrar: SQL com log backups, PostgreSQL com malware, Oracle em ARCHIVELOG e NOARCHIVELOG, cópia S3 imutável e fita semanal.',
+    'form.host':'Host / IP do VBR','form.port':'Porta','form.user':'Usuário','form.pass':'Senha','form.apiver':'Versão da API','conn.apiauto':'auto (negocia a mais alta)',
+    'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositório','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositórios','rail.of':'{n} de {t}',
+    'mode.type':'Tipo','mode.eff':'Eficiência','mode.app':'Aplicação',
+    'lg.full':'Full ativo','lg.synth':'Full sintético','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Lacuna vs. RPO','lg.imm':'Imutável','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
+    'k.job':'Job','k.vm':'Workload','k.repo':'Repositório','k.lanes':'{n} faixas','k.loading':'carregando {n}/{t}',
+    'st.rps':'Restore points','st.in':'em {d} d','st.fulls':'Fulls','st.incs':'+ {n} inc/cópia','st.gfs':'GFS','st.data':'Dados de origem','st.disk':'Em disco','st.red':'Redução','st.saves':'economiza {p}%','st.cd':'Compressão · Dedup','st.w':'ponderado','st.app':'App-consistentes','st.of':'de {t}','st.imm':'Imutáveis hoje','st.oldest':'RP mais antigo','st.gaps':'Lacunas vs. RPO','st.mal':'Malware',
+    't.inc':'Incremental','t.full':'Full ativo','t.synth':'Full sintético','t.copy':'Backup copy','t.tape':'Fita',
+    'sub.rpo':'RPO {h} h','sub.protected':'{n} jobs protegem','sub.detected':'{app} detectado','sub.imm':'imutabilidade {d} dias','sub.aaipoff':'AAIP desativado','sub.logs.sql':'logs SQL a cada {m} min','sub.logs.pg':'WAL a cada {m} min','sub.logs.ora':'archive logs a cada {m} min','sub.idx':'indexação','sub.enc':'criptografado','sub.block':'bloco {b}',
+    'gap.title':'Sem restore point por {h} h','logs.title':'Log backups a cada {m} min',
+    'tl.empty':'Sem restore points no período. Tente 60d ou 90d.','tl.nolist':'Escolha um job, workload ou repositório à esquerda.',
+    'd.empty':'Selecione um ponto de restauração na linha do tempo para ver os detalhes, a cadeia a que pertence e onde mais ele existe.','d.loading':'Carregando detalhes…','d.error':'Não foi possível carregar: {e}',
+    'd.rp':'Restore point','d.job':'Job','d.repo':'Repositório','d.file':'Arquivo','d.platform':'Plataforma','d.noimm':'Sem imutabilidade','d.imm':'Imutável até {d}','d.malbad':'Malware suspeito','d.malok':'Varredura limpa',
+    'd.eff':'Eficiência de armazenamento','d.origin':'Origem','d.disk':'Em disco','d.total':'{x}× total',
+    'd.eff.low':'Compressão baixa: típico de bancos de dados já comprimidos ou criptografados. Revise o compressionLevel do job.','d.eff.tape':'Fita: sem compressão nem dedup por software; a taxa vem da unidade.','d.eff.src':'Fonte: GET /backups/{id}/backupFiles → dataSize, backupSize, dedupRatio, compressRatio.',
+    'd.chain':'Cadeia ({n} pontos)','d.needed':'Restaurar este ponto lê {f} arquivo(s) da cadeia, {s} no total.',
+    'd.where':'Onde este dado existe','d.this':'(este)','d.only1':'Existe em um único repositório: sem cópia offsite nem fita para esta data.',
+    'd.aa':'Application-aware','d.aa.inherit':'{kind}: herda a consistência do restore point de origem. Os Explorers podem ser abertos a partir desta cópia.',
+    'aa.ok':'Application-consistent','aa.warn':'Consistente com avisos','aa.fail':'Crash-consistent (VSS falhou)','aa.off':'Crash-consistent (AAIP desativado)','aa.none':'Sem dados de guest processing',
+    'aa.lastlog':'Último log backup','aa.nologs.ora':'não são copiados (BD em NOARCHIVELOG ou backupLogs=false)',
+    'aa.opts':'Opções de restore que habilita','aa.gran':'(granularidade {m} min)','aa.nolog':'— sem log backup configurado','aa.noarch':'— BD em NOARCHIVELOG',
+    'aa.idx':'Busca de arquivos no índice guest (guestFSIndexing)','aa.vm':'FLR / Instant Recovery / VM completa',
+    'aa.src':'Fonte: /taskSessions/{id}/logs → "{t}"','aa.src.none':'A API não expõe um flag AAIP por RP: é derivado dos logs da task session. Os Explorers não estão na REST; abrem-se pelo console.',
+    'act.title':'Ações · fase 2','act.ir':'Instant Recovery','act.flr':'Restauração de arquivos (FLR)','act.vm':'Restaurar VM completa','act.disk':'Publicar discos','act.ok':'permitido','act.no':'indisponível','act.note':'Esta fase é somente leitura: a ferramenta nunca modifica o VBR. allowedOperations vem do RP.',
+    'app.SQL':['Veeam Explorer for SQL Server','Point-in-time com logs','Restaurar BD em outra instância'],
+    'app.PostgreSQL':['Veeam Explorer for PostgreSQL','Point-in-time com WAL'],
+    'app.AD':['Veeam Explorer for Active Directory','Objetos, atributos, GPO'],
+    'app.Oracle':['Veeam Explorer for Oracle (restore de BD / PDB)','Point-in-time / por SCN com archive logs','Restaurar em outro host ou publicar como Data Guard standby'],
+  },
+};
+// tp: t con reemplazo de {placeholders}
+function tp(key, vars) { let s = t(key); for (const k in (vars||{})) s = s.split('{'+k+'}').join(vars[k]); return s; }
+function attrTxt(s) { return String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/"/g, '&quot;'); }
+// Default language is English; ES/PT are available from the top bar. A language
+// the user picked before wins, since it is stored in localStorage.
+let LANG = localStorage.getItem('lang') || 'en';
+let connState = null;  // {where} cuando esta conectado
+function t(key) { return (I18N[LANG] && I18N[LANG][key]) || I18N.es[key] || key; }
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.getAttribute('data-i18n-html')); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-placeholder')); });
+  const c = document.getElementById('connectedAs');
+  if (c) c.innerHTML = connState ? `<span class="dot"></span><span class="mono">${esc(connState.where)}</span>` : '';
+}
+function setLang(l) {
+  LANG = l; localStorage.setItem('lang', l);
+  document.querySelectorAll('.flag').forEach(f => f.classList.toggle('active', f.dataset.lang === l));
+  applyI18n();
+  if (sessionId) { renderList(); renderTimeline(); renderDetail(); }
+}
+
+// --- helpers ------------------------------------------------------------------
+// getJSON: fetch que falla claro si la respuesta no es JSON valido (ej: el
+// endpoint no existe y devuelve HTML, o un error del server).
+async function getJSON(url, opts) {
+  const resp = await fetch(url, opts);
+  const ct = resp.headers.get('content-type') || '';
+  if (!resp.ok) {
+    let detail = 'HTTP ' + resp.status;
+    try { detail = (await resp.json()).detail || detail; } catch (_) {}
+    throw new Error(detail);
+  }
+  if (!ct.includes('json')) throw new Error('invalid server response');
+  return resp.json();
+}
+const postJSON = (url, body) => getJSON(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : null });
+const $ = id => document.getElementById(id);
+const DAY = 86400000, PX = 36;
+let TODAY = new Date();
+const d = s => new Date(s);
+const p = n => String(n).padStart(2, '0');
+const LOCALE = { es:'es-AR', en:'en-US', pt:'pt-BR' };
+const fmtD = x => d(x).toLocaleDateString(LOCALE[LANG], { day:'2-digit', month:'short' });
+const fmtDT = x => { const v = d(x); return v.toLocaleDateString(LOCALE[LANG], { weekday:'short', day:'2-digit', month:'short', year:'numeric' }) + ' ' + p(v.getHours()) + ':' + p(v.getMinutes()); };
+const fmtSize = g => g >= 1000 ? (g/1000).toFixed(2) + ' TB' : (g||0).toFixed(0) + ' GB';
+const label = r => t('t.' + r.type);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// --- estado -------------------------------------------------------------------
+const S = { inv:null, pivot:'job', selectedId:null, days:30, mode:'type', query:'', rps:[], total:0, selectedRp:null, detail:null, loadSeq:0 };
+const byId = (arr, id) => (arr||[]).find(x => x.id === id);
+const jobOf = r => byId(S.inv.jobs, r.jobId), vmOf = r => byId(S.inv.vms, r.vmId), repoOf = r => byId(S.inv.repos, r.repoId);
+
+// --- conexion -----------------------------------------------------------------
+async function connect() { await doConnect(false); }
+async function connectDemo() { await doConnect(true); }
+async function doConnect(demo) {
+  $('btnConnect').disabled = $('btnDemo').disabled = true; $('connErr').textContent = '';
+  try {
+    const r = demo ? await postJSON(`${BACKEND}/api/connect-demo`) : await postJSON(`${BACKEND}/api/connect`, {
+      host: $('host').value.trim(), port: +($('port').value || 9419), username: $('user').value, password: $('pass').value,
+      api_version: $('apiv').value, verify_ssl: false });
+    sessionId = r.session_id;
+    $('pass').value = '';
+    connState = { where: demo ? 'demo-vbr' : `${$('host').value.trim()}:${$('port').value || 9419} · REST ${r.api_version}` };
+    $('connectView').style.display = 'none'; $('appView').style.display = 'grid'; $('btnDisconnect').style.display = ''; $('btnDiag').style.display = '';
+    applyI18n();
+    S.inv = await getJSON(`${BACKEND}/api/${sessionId}/inventory`);
+    TODAY = new Date();
+    S.selectedId = (S.inv.jobs[0] || {}).id || null;
+    await selectAndLoad();
+  } catch (e) {
+    $('connErr').textContent = e.message;
+    if (sessionId) await disconnect();
+  } finally { $('btnConnect').disabled = $('btnDemo').disabled = false; }
+}
+async function disconnect() {
+  if (sessionId) { try { await fetch(`${BACKEND}/api/${sessionId}/disconnect`, { method:'POST' }); } catch (_) {} }
+  sessionId = null; connState = null; S.inv = null; S.rps = []; S.selectedRp = null; S.detail = null;
+  $('connectView').style.display = ''; $('appView').style.display = 'none'; $('btnDisconnect').style.display = 'none'; $('btnDiag').style.display = 'none';
+  applyI18n();
+}
+// Diagnostico (alpha): abre el bundle JSON (el server lo manda como descarga).
+function downloadDiagnostics() { if (sessionId) window.open(`${BACKEND}/api/${sessionId}/diagnostics`, '_blank'); }
+async function refreshInventory() {
+  if (!sessionId) return;
+  S.inv = await postJSON(`${BACKEND}/api/${sessionId}/inventory/refresh`);
+  await selectAndLoad();
+}
+
+// --- carga de restore points (de a 100, pintando cada pagina) ----------------
+async function selectAndLoad() {
+  const seq = ++S.loadSeq;
+  S.rps = []; S.total = 0; S.selectedRp = null; S.detail = null;
+  renderList(); renderTimeline(true); renderDetail();
+  if (!S.selectedId) return;
+  let skip = 0, total = 0;
+  try {
+    do {
+      const page = await getJSON(`${BACKEND}/api/${sessionId}/restore-points?pivot=${S.pivot}&id=${encodeURIComponent(S.selectedId)}&days=${S.days}&skip=${skip}&limit=100${S.mode === 'app' ? '&aaip=1' : ''}`);
+      if (seq !== S.loadSeq) return; // el usuario cambio de seleccion mientras cargaba
+      total = page.total; S.total = total;
+      S.rps = S.rps.concat(page.data); skip += page.data.length;
+      renderTimeline();
+      if (!page.data.length) break;
+    } while (skip < total);
+  } catch (e) {
+    if (seq === S.loadSeq) $('crumb').innerHTML += ` <span class="loading" style="background:var(--bad-soft);color:var(--red)">${esc(e.message)}</span>`;
+  }
+}
+
+document.querySelectorAll('.pivots button').forEach(b => b.addEventListener('click', async () => {
+  S.pivot = b.dataset.pivot; document.querySelectorAll('.pivots button').forEach(x => x.classList.toggle('on', x === b));
+  const first = ({ job:S.inv.jobs, vm:S.inv.vms, repo:S.inv.repos })[S.pivot][0];
+  S.selectedId = first ? first.id : null; S.query = ''; $('q').value = ''; await selectAndLoad();
+}));
+document.querySelectorAll('[data-days]').forEach(b => b.addEventListener('click', async () => {
+  S.days = +b.dataset.days; document.querySelectorAll('[data-days]').forEach(x => x.classList.toggle('on', x === b)); await selectAndLoad();
+}));
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', async () => {
+  S.mode = b.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b));
+  if (S.mode === 'app' && S.rps.some(r => !r.aaip) && S.rps.some(r => { const j = jobOf(r); return j && j.aaip && j.aaip.on !== null; })) await selectAndLoad(); else renderTimeline();
+}));
+$('q').addEventListener('input', e => { S.query = e.target.value.toLowerCase(); renderList(); });
+
+// --- rail ---------------------------------------------------------------------
+function renderList() {
+  if (!S.inv) return;
+  let items = [], title = '';
+  if (S.pivot === 'job') { title = t('rail.jobs'); items = S.inv.jobs.map(j => ({ id:j.id, n:j.name, s:`${j.kind} · ${j.repoName}`, badge: j.aaip && j.aaip.on ? 'AAIP' : j.gfs !== '—' ? 'GFS' : null })); }
+  if (S.pivot === 'vm') { title = t('rail.vms'); items = S.inv.vms.map(v => ({ id:v.id, n:v.name, s:v.os || v.platform, badge: v.app || null })); }
+  if (S.pivot === 'repo') { title = t('rail.repos'); items = S.inv.repos.map(r => ({ id:r.id, n:r.name, s:`${r.type}${r.usedGB ? ' · ' + fmtSize(r.usedGB) : ''}`, badge: r.immDays ? `imm ${r.immDays}d` : null })); }
+  $('railTitle').textContent = title;
+  const shown = items.filter(i => !S.query || i.n.toLowerCase().includes(S.query) || (i.s||'').toLowerCase().includes(S.query));
+  $('railCount').textContent = shown.length;
+  $('pageInfo').textContent = tp('rail.of', { n: shown.length, t: items.length });
+  $('list').innerHTML = shown.map(i => `<button class="item ${i.id === S.selectedId ? 'on' : ''}" data-id="${esc(i.id)}"><span class="n">${esc(i.n)}${i.badge ? `<span class="badge ${i.badge === 'GFS' ? 'gfs' : /^imm/.test(i.badge) ? '' : 'app'}">${esc(i.badge)}</span>` : ''}</span><span class="s">${esc(i.s)}</span></button>`).join('');
+  $('list').querySelectorAll('.item').forEach(b => b.addEventListener('click', async () => { S.selectedId = b.dataset.id; await selectAndLoad(); }));
+}
+
+// --- carriles -----------------------------------------------------------------
+function logMins(job, vm) {
+  const c = job && job.aaip; if (!c || !c.on || !vm) return 0;
+  if (vm.app === 'SQL' && c.sql && c.sql.logsProcessing === 'Backup') return c.sql.backupMinsCount || 0;
+  if (vm.app === 'PostgreSQL' && c.postgres && c.postgres.backupLogs) return c.postgres.backupMinsCount || 0;
+  if (vm.app === 'Oracle' && c.oracle && c.oracle.backupLogs && !/NOARCHIVELOG/.test(vm.db || '')) return c.oracle.backupMinsCount || 0;
+  return 0;
+}
+function aaipSub(j) {
+  const c = j.aaip; if (!c || c.on === null || c.on === undefined) return '';
+  if (!c.on) return ' · ' + t('sub.aaipoff');
+  return ` · AAIP ${c.vss || ''}${c.sql ? ' · ' + tp('sub.logs.sql', {m:c.sql.backupMinsCount}) : ''}${c.postgres ? ' · ' + tp('sub.logs.pg', {m:c.postgres.backupMinsCount}) : ''}${c.oracle ? ' · ' + tp('sub.logs.ora', {m:c.oracle.backupMinsCount}) : ''}${c.indexing ? ' · ' + t('sub.idx') : ''}`;
+}
+function lanes() {
+  const inv = S.inv, rps = S.rps;
+  if (S.pivot === 'job') {
+    const j = byId(inv.jobs, S.selectedId); if (!j) return { kind:t('k.job'), title:'—', sub:'', rpo:24, lanes:[] };
+    const vmIds = [...new Set(rps.map(r => r.vmId))].concat((j.vmIds||[]).filter(v => !rps.some(r => r.vmId === v)));
+    return { kind:t('k.job'), title:j.name, rpo:j.rpo,
+      sub:`${j.kind} · ${j.sched} · GFS ${j.gfs} · ${tp('sub.rpo',{h:j.rpo})}${j.comp ? ' · compressionLevel ' + j.comp : ''}${j.block ? ' · ' + tp('sub.block',{b:j.block}) : ''}${j.enc ? ' · ' + t('sub.enc') : ''}${aaipSub(j)}`,
+      lanes: vmIds.map(v => { const vm = byId(inv.vms, v) || { name:v }; return { n:vm.name, s:vm.os || vm.platform || '', app:vm.app, logs:logMins(j, vm), pts:rps.filter(r => r.vmId === v) }; }) };
+  }
+  if (S.pivot === 'vm') {
+    const v = byId(inv.vms, S.selectedId); if (!v) return { kind:t('k.vm'), title:'—', sub:'', rpo:24, lanes:[] };
+    const js = inv.jobs.filter(j => (v.jobIds||[]).includes(j.id) || rps.some(r => r.jobId === j.id));
+    return { kind:t('k.vm'), title:v.name, rpo:24,
+      sub:`${v.os || v.platform}${v.app ? ' · ' + tp('sub.detected',{app:v.app}) : ''} · ${fmtSize(v.sizeGB)} · ${tp('sub.protected',{n:js.length})}`,
+      lanes: js.map(j => ({ n:j.name, s:`${j.kind} → ${j.repoName}`, app: j.aaip && j.aaip.on ? 'AAIP' : null, logs:logMins(j, v), rpo:j.rpo, pts:rps.filter(r => r.jobId === j.id) })) };
+  }
+  const rp = byId(inv.repos, S.selectedId); if (!rp) return { kind:t('k.repo'), title:'—', sub:'', rpo:24, lanes:[] };
+  const vmIds = [...new Set(rps.map(r => r.vmId))];
+  return { kind:t('k.repo'), title:rp.name, rpo:/tape/i.test(rp.type) ? 168 : 24,
+    sub:`${rp.type}${rp.usedGB ? ` · usedSpaceGB ${fmtSize(rp.usedGB)}` : ''}${rp.capacityGB ? ` / ${fmtSize(rp.capacityGB)}` : ''}${rp.immDays ? ' · ' + tp('sub.imm',{d:rp.immDays}) : ''}`,
+    lanes: vmIds.map(v => { const vm = byId(inv.vms, v) || { name:v }; const js = inv.jobs.filter(j => rps.some(r => r.vmId === v && r.jobId === j.id)); return { n:vm.name, s:js.map(j => j.name).join(', '), app:vm.app, logs:Math.max(0, ...js.map(j => logMins(j, vm))), pts:rps.filter(r => r.vmId === v) }; }) };
+}
+function gapsFor(pts, rpoH) {
+  const out = [], s = [...pts].sort((a, b) => d(a.date) - d(b.date)), tol = rpoH * 3600000 * 1.25;
+  for (let i = 1; i < s.length; i++) if (d(s[i].date) - d(s[i-1].date) > tol) out.push([d(s[i-1].date), d(s[i].date)]);
+  if (s.length && TODAY - d(s[s.length-1].date) > tol) out.push([d(s[s.length-1].date), TODAY]);
+  return out;
+}
+
+// --- timeline -----------------------------------------------------------------
+const st = (k, v, s = '', cls = '', hi = false) => `<div class="stat ${cls} ${hi ? 'hi' : ''}"><span class="k">${k}</span><span class="v mono">${v}${s ? `<small>${s}</small>` : ''}</span></div>`;
+const effColor = r => { const x = Math.min(Math.max((r.dataSize / (r.sizeGB || 1) - 1) / 2.5, 0), 1); return `color-mix(in oklab, var(--amber) ${Math.round((1 - x) * 100)}%, var(--green))`; };
+
+function renderTimeline(loading) {
+  if (!S.inv) return;
+  const L = lanes(), rps = S.rps;
+  const start = new Date(TODAY); start.setHours(0,0,0,0); start.setDate(start.getDate() - S.days + 1);
+  const width = (S.days + 1) * PX, x = v => ((v - start) / DAY) * PX;
+  const all = L.lanes.flatMap(l => l.pts);
+  const gapsAll = L.lanes.flatMap(l => gapsFor(l.pts, l.rpo || L.rpo));
+  const fulls = all.filter(r => r.type !== 'inc' && r.type !== 'copy').length;
+  const size = all.reduce((a, r) => a + r.sizeGB, 0), dataSize = all.reduce((a, r) => a + r.dataSize, 0);
+  const red = dataSize && size ? dataSize / size : 0;
+  const wavg = k => size ? all.reduce((a, r) => a + (r[k] || 1) * r.sizeGB, 0) / size : 0;
+  const imm = all.filter(r => r.immUntil && d(r.immUntil) > TODAY).length;
+  const mal = all.filter(r => r.mal !== 'Clean').length;
+  const aa = all.map(r => r.aaip).filter(v => v && v !== 'off'), aaBad = aa.filter(v => v !== 'ok').length;
+  const oldest = all.length ? all.reduce((m, r) => d(r.date) < m ? d(r.date) : m, new Date()) : null;
+
+  $('crumb').innerHTML = `<span>${L.kind}</span><span class="sep">/</span><b>${esc(L.title)}</b><span class="sep">·</span><span>${esc(L.sub)}</span>${loading || rps.length < S.total ? `<span class="loading">${tp('k.loading',{n:rps.length,t:S.total || '…'})}</span>` : ''}`;
+  $('stats').innerHTML = [
+    st(t('st.rps'), all.length, tp('st.in',{d:S.days})),
+    st(t('st.fulls'), fulls, tp('st.incs',{n:all.length - fulls})),
+    st(t('st.gfs'), all.filter(r => r.gfs).length),
+    st(t('st.data'), fmtSize(dataSize), 'dataSize'),
+    st(t('st.disk'), fmtSize(size), 'backupSize'),
+    st(t('st.red'), red ? red.toFixed(1) + '×' : '—', red ? tp('st.saves',{p:Math.round((1 - 1/red) * 100)}) : '', '', true),
+    st(t('st.cd'), wavg('compressRatio').toFixed(1) + '× · ' + wavg('dedupRatio').toFixed(2) + '×', t('st.w')),
+    aa.length ? st(t('st.app'), aa.length - aaBad, tp('st.of',{t:aa.length}), aaBad ? 'warn' : '') : '',
+    st(t('st.imm'), imm, all.length ? Math.round(imm / all.length * 100) + '%' : ''),
+    st(t('st.oldest'), oldest ? fmtD(oldest) : '—'),
+    st(t('st.gaps'), gapsAll.length, '', gapsAll.length ? 'warn' : ''),
+    st(t('st.mal'), mal, '', mal ? 'alert' : ''),
+  ].join('');
+
+  if (!L.lanes.length) { $('tl').innerHTML = `<div class="empty-tl" style="grid-column:1/-1">${S.selectedId ? (loading ? '…' : t('tl.empty')) : t('tl.nolist')}</div>`; return; }
+  const dayCells = withText => { let s = ''; for (let i = 0; i <= S.days; i++) { const v = new Date(start.getTime() + i * DAY); const wk = v.getDay() === 0 || v.getDay() === 6, first = i === 0 || v.getDate() === 1, today = v.toDateString() === TODAY.toDateString(); s += `<div class="day ${wk ? 'wk' : ''} ${first ? 'm' : ''} ${today ? 'today' : ''}" style="left:${i * PX}px;width:${PX}px">${withText ? (first ? `<b>${v.toLocaleDateString(LOCALE[LANG], { month:'short' })}</b>` : '') + (today ? '●' : v.getDate()) : ''}</div>`; } return s; };
+  let h = `<div class="axis lbl">${tp('k.lanes',{n:L.lanes.length})}</div><div class="axis"><div class="days" style="width:${width}px">${dayCells(true)}</div></div>`;
+  L.lanes.forEach(l => {
+    h += `<div class="lbl"><span class="n">${esc(l.n)}${l.app ? `<span class="badge app">${esc(l.app)}</span>` : ''}</span><span class="s">${esc(l.s)}</span><span class="cnt mono">${l.pts.length}</span></div><div class="lane" style="width:${width}px">${dayCells(false)}`;
+    if (S.mode === 'app' && l.logs && l.pts.length) {
+      const first = Math.max(0, Math.min(...l.pts.map(r => x(d(r.date)))));
+      h += `<i class="logband" style="left:${first}px;width:${Math.max(0, x(TODAY) - first)}px;background-size:${Math.max(PX * l.logs / 1440, 2)}px 100%" title="${attrTxt(tp('logs.title',{m:l.logs}))}"></i>`;
+    }
+    gapsFor(l.pts, l.rpo || L.rpo).forEach(([a, b]) => { h += `<div class="gaprect" style="left:${x(a) + 6}px;width:${Math.max(x(b) - x(a) - 12, 6)}px" title="${attrTxt(tp('gap.title',{h:((b - a) / 3600000).toFixed(0)}))}"></div>`; });
+    l.pts.forEach(r => {
+      const aaCls = S.mode === 'app' && r.aaip ? 'aa aa-' + r.aaip : '';
+      const cls = [r.type, r.full && r.type === 'copy' ? 'full' : '', r.gfs && r.type !== 'tape' ? 'gfs' : '', r.mal !== 'Clean' ? 'mal' : '', r.immUntil && d(r.immUntil) > TODAY ? 'imm' : '', S.selectedRp === r.id ? 'sel' : '', S.mode === 'eff' ? 'eff' : '', aaCls].join(' ');
+      const effStyle = S.mode === 'eff' && r.mal === 'Clean' && r.sizeGB ? `background:${effColor(r)};` : '';
+      h += `<button class="rp ${cls}" data-rp="${esc(r.id)}" style="left:${x(d(r.date))}px;${effStyle}" aria-label="${esc(l.n)} ${fmtDT(r.date)}"></button>`;
+    });
+    h += `</div>`;
+  });
+  const sc = $('scroll'), keep = sc.scrollLeft;
+  $('tl').innerHTML = h;
+  const tip = $('tip');
+  $('tl').querySelectorAll('.rp').forEach(b => {
+    b.addEventListener('click', () => selectRp(b.dataset.rp));
+    b.addEventListener('mouseenter', e => { const r = byId(rps, b.dataset.rp); if (!r) return; const vm = vmOf(r) || {}; tip.innerHTML = `<b>${esc(vm.name || r.vmId)}</b> · ${label(r)}${r.gfs ? ' · GFS ' + esc(r.gfs) : ''}<br>${fmtDT(r.date)} · ${fmtSize(r.dataSize)} → ${fmtSize(r.sizeGB)}${r.sizeGB ? ` (${(r.dataSize / r.sizeGB).toFixed(1)}×)` : ''}${r.mal !== 'Clean' ? ' · <span class="warnt">malware</span>' : ''}`; tip.classList.add('show'); moveTip(e); });
+    b.addEventListener('mousemove', moveTip);
+    b.addEventListener('mouseleave', () => tip.classList.remove('show'));
+  });
+  requestAnimationFrame(() => { sc.scrollLeft = S.selectedRp ? keep : sc.scrollWidth; });
+}
+function moveTip(e) { const tip = $('tip'); tip.style.left = e.clientX + 'px'; tip.style.top = (e.clientY - 10) + 'px'; }
+
+// --- detalle ------------------------------------------------------------------
+async function selectRp(id) {
+  S.selectedRp = id; S.detail = null; renderTimeline(); renderDetail();
+  try { S.detail = await getJSON(`${BACKEND}/api/${sessionId}/restore-points/${encodeURIComponent(id)}`); }
+  catch (e) { S.detail = { error: e.message }; }
+  if (S.selectedRp === id) renderDetail();
+}
+const ICON_OK = '<svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>', ICON_NO = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+
+function renderDetail() {
+  const el = $('detail'); if (!el) return;
+  if (!S.selectedRp) { el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg><br>${t('d.empty')}</div>`; return; }
+  if (!S.detail) { el.innerHTML = `<div class="empty">${t('d.loading')}</div>`; return; }
+  if (S.detail.error) { el.innerHTML = `<div class="empty">${tp('d.error',{e:esc(S.detail.error)})}</div>`; return; }
+  const { rp: r, chain, needed, locations } = S.detail;
+  const j = jobOf(r) || { name:r.jobId, kind:'', aaip:{ on:null } }, vm = vmOf(r) || { name:r.vmId }, repo = repoOf(r) || { name:r.repoId || '—', type:'' };
+  const swCls = tt => tt === 'copy' ? 'copy' : tt === 'tape' ? 'tape' : 'full';
+  const locs = [{ repo, when:r.date, type:r.type, here:true }, ...(locations||[]).map(o => ({ repo: repoOf(o) || { name:o.repoId }, when:o.date, type:o.type }))];
+  const isFull = r.full && r.type !== 'copy';
+  el.innerHTML = `
+  <div class="dh"><div class="eyebrow">${t('d.rp')} · ${label(r)}</div><h2>${esc(vm.name)} <span class="dim">·</span> ${fmtDT(r.date)}</h2>
+    <div class="pills">${isFull ? '<span class="pill full">Full</span>' : ''}${r.gfs ? `<span class="pill gfs">GFS ${esc(r.gfs)}</span>` : ''}${r.immUntil && d(r.immUntil) > TODAY ? `<span class="pill ok">${tp('d.imm',{d:fmtD(r.immUntil)})}</span>` : `<span class="pill">${t('d.noimm')}</span>`}${r.mal !== 'Clean' ? `<span class="pill bad">${t('d.malbad')}</span>` : `<span class="pill ok">${t('d.malok')}</span>`}</div></div>
+  <dl class="kv">
+    <dt>${t('d.job')}</dt><dd>${esc(j.name)} <span class="dim">· ${esc(j.kind)}</span></dd>
+    <dt>${t('d.repo')}</dt><dd>${esc(repo.name)} <span class="dim">· ${esc(repo.type)}</span></dd>
+    <dt>${t('d.file')}</dt><dd class="mono" style="font-size:12px">${esc(r.file || '—')}</dd>
+    <dt>${t('d.platform')}</dt><dd>${esc(vm.platform || '—')}${vm.os ? ' · ' + esc(vm.os) : ''}</dd>
+    <dt>restorePointId</dt><dd class="mono" style="font-size:12px">${esc(r.id)}</dd>
+    <dt>backupFileId</dt><dd class="mono" style="font-size:12px">${esc(r.backupFileId || '—')}</dd>
+  </dl>
+  <div class="dsec"><h4>${t('d.eff')}</h4>
+    <div class="effbar">
+      <div class="row"><span class="k">${t('d.origin')}</span><span class="bar"><i style="width:100%"></i></span><span class="mono">${fmtSize(r.dataSize)}</span></div>
+      <div class="row"><span class="k">${t('d.disk')}</span><span class="bar"><i class="disk" style="width:${Math.max(3, Math.round(r.sizeGB / (r.dataSize || 1) * 100))}%"></i></span><span class="mono">${fmtSize(r.sizeGB)}</span></div>
+      <div class="ratios"><span class="pill mono">compressRatio ${(r.compressRatio || 1).toFixed(1)}×</span><span class="pill mono">dedupRatio ${(r.dedupRatio || 1).toFixed(2)}×</span><span class="pill ok mono">${tp('d.total',{x:(r.dataSize / (r.sizeGB || 1)).toFixed(1)})}</span></div>
+    </div>
+    <div class="note">${r.type === 'tape' ? t('d.eff.tape') : r.compressRatio && r.compressRatio < 1.6 ? t('d.eff.low') : t('d.eff.src')}</div>
+  </div>
+  <div class="dsec"><h4>${tp('d.chain',{n:chain.length})}</h4><div class="chain">${chain.map((c, i) => `${i ? '<span class="arrow">›</span>' : ''}<span class="c ${c.full ? 'full' : ''} ${c.id === r.id ? 'here' : ''}" title="${attrTxt(label(c) + ' ' + fmtDT(c.date))}"></span>`).join('')}</div>
+    <div class="note">${tp('d.needed',{f:needed.files, s:fmtSize(needed.sizeGB)})}</div></div>
+  <div class="dsec"><h4>${t('d.where')}</h4><div class="loc">${locs.map(l => `<div><i class="sw ${swCls(l.type)}"></i><span>${esc(l.repo.name)}${l.here ? ` <span class="dim">${t('d.this')}</span>` : ''}</span><span class="when mono">${fmtDT(l.when)}</span></div>`).join('')}</div>
+    ${locs.length === 1 ? `<div class="note">${t('d.only1')}</div>` : ''}</div>
+  ${aaBlock(r, j, vm)}
+  <div class="actions"><h4>${t('act.title')}</h4>
+    ${[['StartViVMInstantRecovery','act.ir'],['StartFlrRestore','act.flr'],['StartEntireVmRestore','act.vm'],['StartDiskPublish','act.disk']].map(([op, k]) => { const ok = (r.allowedOperations||[]).includes(op); return `<button disabled style="${ok ? '' : 'opacity:.45'}">${t(k)} <span>${ok ? t('act.ok') : t('act.no')}</span></button>`; }).join('')}
+    <div class="note">${t('act.note')}</div></div>`;
+}
+
+function aaBlock(r, j, vm) {
+  const cfg = j.aaip || { on:null }, res = r.aaip;
+  if (cfg.on === null || cfg.on === undefined) return `<div class="dsec"><h4>${t('d.aa')}</h4><div class="note">${tp('d.aa.inherit',{kind:esc(j.kind)})}</div></div>`;
+  const lab = res ? t('aa.' + res) : t('aa.none');
+  const pill = { ok:'ok', warn:'gfs', fail:'bad', off:'' }[res] || '';
+  const logs = logMins(j, vm);
+  const opts = [];
+  const A = vm.app && t('app.' + vm.app);
+  if (Array.isArray(A)) {
+    const ok = res === 'ok' || res === 'warn';
+    opts.push([ok, A[0]]);
+    if (A[1]) opts.push([ok && logs > 0, A[1] + ' ' + (ok && logs > 0 ? tp('aa.gran',{m:logs}) : logs ? '' : /NOARCHIVELOG/.test(vm.db || '') ? t('aa.noarch') : t('aa.nolog'))]);
+    if (A[2]) opts.push([ok, A[2]]);
+  }
+  opts.push([!!(cfg.on && cfg.indexing), t('aa.idx')]);
+  opts.push([true, t('aa.vm')]);
+  const o = cfg.oracle, s = cfg.sql, pg = cfg.postgres;
+  const sessType = vm.app === 'SQL' ? 'SqlLogBackup' : vm.app === 'Oracle' ? 'OracleLogBackup' : 'PostgreSqlLogBackup';
+  return `<div class="dsec"><h4>${t('d.aa')}</h4>
+    <div class="pills"><span class="pill ${pill}">${lab}</span>${vm.app ? `<span class="pill">${esc(vm.app)}</span>` : ''}${vm.db ? `<span class="pill mono">${esc(vm.db)}</span>` : ''}</div>
+    ${cfg.on ? `<div class="aa-grid">
+      <span class="k">vss</span><span class="mono">${esc(cfg.vss || '—')}</span>
+      ${s ? `<span class="k">sql.logsProcessing</span><span class="mono">${esc(s.logsProcessing)} · ${s.backupMinsCount} min · ${esc(s.retainLogBackups || '')}</span>` : ''}
+      ${pg ? `<span class="k">postgreSQL.backupLogs</span><span class="mono">${pg.backupLogs} · ${pg.backupMinsCount} min</span>` : ''}
+      ${o ? `<span class="k">oracle.credentials</span><span class="mono">${o.useGuestCredentials ? 'guest' : esc(o.credentialsId || '')}</span>
+      <span class="k">oracle.archiveLogs</span><span class="mono">${esc(o.archiveLogs)}${o.deleteHoursCount ? ` (${o.deleteHoursCount} h)` : ''}${o.deleteGBsCount ? ` (${o.deleteGBsCount} GB)` : ''}</span>
+      <span class="k">oracle.backupLogs</span><span class="mono">${o.backupLogs} · ${o.backupMinsCount} min · ${esc(o.retainLogBackups || '')}${o.keepDaysCount ? ` ${o.keepDaysCount} d` : ''}</span>` : ''}
+      ${logs ? `<span class="k">${t('aa.lastlog')}</span><span class="mono">sessionType ${sessType}</span>` : ''}
+      ${vm.app === 'Oracle' && !logs ? `<span class="k">Archive logs</span><span class="mono" style="color:var(--amber)">${t('aa.nologs.ora')}</span>` : ''}
+    </div>` : ''}
+    <h4 style="margin-top:4px">${t('aa.opts')}</h4>
+    <div class="optlist">${opts.map(([ok, tx]) => `<div class="${ok ? 'ok' : 'no'}">${ok ? ICON_OK : ICON_NO}<span>${esc(tx)}</span></div>`).join('')}</div>
+    <div class="note">${r.aaipDetail ? tp('aa.src',{t:esc(r.aaipDetail)}) : t('aa.src.none')}</div>
+  </div>`;
+}
+
+// --- boot ---------------------------------------------------------------------
+setLang(LANG);
+renderDetail();
+// Version en el brand, tomada del backend.
+fetch(`${BACKEND}/health`).then(r => r.json()).then(h => {
+  if (h && h.version) $('brandVer').textContent = 'v' + h.version.replace(/-(\w)/, (m, c) => '-' + c.toUpperCase());
+}).catch(() => {});
+</script>
+</body>
+</html>

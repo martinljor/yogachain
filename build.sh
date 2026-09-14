@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Compila el binario (uno por SO) en dist/, con la VERSION en el nombre. Requiere
+# Go SOLO en la maquina de build; el usuario final NO compila: descarga el binario
+# de su SO y lo corre. La version se toma de main.go (const version).
+set -e
+cd "$(dirname "$0")"
+mkdir -p dist
+
+VERSION=$(grep -oE 'const version = "[^"]+"' main.go | sed -E 's/.*"([^"]+)".*/\1/')
+[ -z "$VERSION" ] && VERSION="dev"
+echo "Version: v$VERSION"
+
+# Limpiamos binarios viejos para no dejar versiones anteriores mezcladas.
+rm -f dist/yogachain-* dist/SHA256SUMS.txt
+
+L="dist/yogachain-linux-amd64-v$VERSION"
+W="dist/yogachain-windows-amd64-v$VERSION.exe"
+M="dist/yogachain-darwin-arm64-v$VERSION"
+
+# -trimpath quita rutas locales; -s -w quita simbolos/debug (binario mas chico e
+# higiene de release; a veces baja falsos positivos de antivirus, sin garantia).
+echo "Linux   x64  ..."; GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o "$L" .
+echo "Windows x64  ..."; GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o "$W" .
+echo "macOS   arm64..."; GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o "$M" .
+
+# ZIP del binario de Windows: el .exe suelto lo bloquea el escaneo de descarga del
+# navegador (falso positivo tipico de binario Go sin firmar). El ZIP suele pasar,
+# y de paso deja el SHA256 al lado para verificar.
+echo "ZIP (Windows) ..."; ( cd dist && zip -q "yogachain-windows-amd64-v$VERSION.zip" "yogachain-windows-amd64-v$VERSION.exe" )
+
+# Checksums (portable: sha256sum en Linux, shasum en macOS).
+echo "SHA256SUMS.txt ..."
+( cd dist && (command -v sha256sum >/dev/null && sha256sum yogachain-* || shasum -a 256 yogachain-*) > SHA256SUMS.txt )
+
+echo "Listo -> dist/"
+ls -lh dist

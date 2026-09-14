@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt (aviso, no bloquea en alpha)
+        continue-on-error: true
+        run: test -z "$(gofmt -l .)" || (gofmt -d . && exit 1)
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./... -count=1
+      - name: build (smoke)
+        run: go build -o /tmp/yogachain .

@@ -1,0 +1,41 @@
+name: release
+# Al empujar un tag vX.Y.Z[-alpha]: compila linux/windows/macos con build.sh y
+# publica un GitHub Release con los binarios, el zip de Windows y SHA256SUMS.txt.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: test
+        run: go test ./... -count=1
+      - name: version matches tag
+        run: |
+          V=$(grep -oE 'const version = "[^"]+"' main.go | sed -E 's/.*"([^"]+)".*/\1/')
+          [ "v$V" = "${GITHUB_REF_NAME}" ] || { echo "main.go version v$V != tag ${GITHUB_REF_NAME}"; exit 1; }
+      - name: build
+        run: ./build.sh
+      - name: release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}
+          generate_release_notes: true
+          body: |
+            **EXPERIMENTAL — alpha, solo lectura, uso en laboratorio.**
+
+            Descargá el binario de tu SO, ejecutalo y se abre `http://localhost:8001`.
+            Windows: usar el `.zip` si el navegador bloquea el `.exe`. Linux/macOS: `chmod +x`.
+
+            Si algo falla: botón **Diagnóstico** en la consola (descarga un JSON sin credenciales
+            con la traza de llamadas REST y muestras del schema) + el archivo `yogachain.log`
+            que queda al lado del binario. Adjuntalos en un issue.
+          files: |
+            dist/yogachain-*
+            dist/SHA256SUMS.txt

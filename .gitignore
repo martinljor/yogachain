@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+
+# Local / runtime
+*.log
+
+# Dev-only (rutas locales)
+.claude/
+
+# Go (artefactos de build; el codigo fuente si va al repo)
+/dist/
+/yogachain
+*.exe
+
+# Prototipo Python descartado (si quedo en el working copy)
+/legacy/
