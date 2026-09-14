@@ -11,7 +11,7 @@ Header obligatorio: `x-api-version: 1.3-rev2`. Login: `POST /api/oauth2/token` (
 
 | Modelo | Endpoint | Campos usados |
 |---|---|---|
-| `Job` | `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}` | `name`, `type`, `storage.backupRepositoryId`, `storage.gfsPolicy{weekly,monthly,yearly}`, `storage.advancedSettings.storageData{compressionLevel, storageOptimization, inlineDataDedupEnabled, encryption.isEnabled}`, `schedule` |
+| `Job` | `GET /api/v1/jobs/states` (lista; fallback `/jobs`, luego `/backups`) + `GET /api/v1/jobs/{id}` (detalle, tolerante a 500) | `name`, `type`, `storage.backupRepositoryId`, `storage.gfsPolicy{weekly,monthly,yearly}`, `storage.advancedSettings.storageData{compressionLevel, storageOptimization, inlineDataDedupEnabled, encryption.isEnabled}`, `schedule` |
 | `Job.aaip` | `GET /api/v1/jobs/{id}` | `guestProcessing.appAwareProcessing{isEnabled, appSettings[]{vmObject, vss, usePersistentGuestAgent, transactionLogs, sql{logsProcessing, backupMinsCount, retainLogBackups, keepDaysCount}, oracle{useGuestCredentials, credentialsId, archiveLogs, deleteHoursCount, deleteGBsCount, backupLogs, backupMinsCount, retainLogBackups, keepDaysCount}, postgreSQL{backupLogs, backupMinsCount, …}}}`, `guestProcessing.guestFSIndexing.isEnabled` |
 | `Workload` | `GET /api/v1/backupObjects` + **`GET /api/v1/backups/{id}/objects`** | `id`, `objectId`, `name`, `type`, `platformName`, `restorePointsCount`, `size`. **FIELD:** `backupObject.backupId` no coincide con el `backupId` de sus RPs; la relación job↔objeto sale de `/backups/{id}/objects` |
 | `Repo` | `GET /api/v1/backupInfrastructure/repositories` + `/repositories/states` + `/scaleOutRepositories` (SOBR no están en states) | `type`, `bucket.immutability{isEnabled, daysCount, immutabilityMode}`, `repository.makeRecentBackupsImmutableDays`; states: `capacityGB`, `freeGB`, `usedSpaceGB`, `isOnline` |
@@ -40,6 +40,8 @@ Header obligatorio: `x-api-version: 1.3-rev2`. Login: `POST /api/oauth2/token` (
 - Backups de plug-in (RMAN, SAP HANA, SQL plug-in): `EPlatformType.ApplicationBackupRepository`; no aparecen como RP de VM. El estado del plug-in está en `/agents` (`DiscoveredComputerPluginModel.type`: MSSQL, OracleRMAN, SAPHANA, SAPOnOracle).
 - `BackupObjectModel.type` es string libre (sin enum).
 - No hay endpoint de "RPO": el RPO por job se configura en la tool.
+- **FIELD (vbrdb-01):** `GET /jobs` → 500 `Source item ... is not part of 'Clusters' hierarchy` cuando hay jobs de aplicación (plug-ins RMAN/HANA/MongoDB/SQL). `/jobs/states` no expande objetos y sí los lista (tipo `Unknown`).
+- **FIELD (cdp):** un VBR solo con políticas CDP devuelve 0 jobs y 0 backups: CDP y réplicas van por `/replicas` y `/cdp` (fase 3).
 
 ## Implementación
 

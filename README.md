@@ -90,6 +90,7 @@ yogachain/
 | POST | `/api/{session}/disconnect` | closes the session |
 | GET | `/api/{session}/inventory` | jobs (storage, GFS, guest processing), workloads, repositories |
 | POST | `/api/{session}/inventory/refresh` | drops the cached inventory and reloads it |
+| GET | `/api/{session}/inventory/progress` | `{stage, done, total, message, percent}` while the inventory loads (drives the progress bar) |
 | GET | `/api/{session}/restore-points?pivot=job\|vm\|repo&id=…&days=30&skip=0&limit=100[&aaip=1]` | normalized restore points, paged by 100 |
 | GET | `/api/{session}/restore-points/{rp}` | detail: restore point + AAIP result + chain + other locations |
 | GET | `/api/{session}/raw/{path...}` | read-only passthrough to the REST API (e.g. `raw/v1/backups`) to inspect the real schema |
@@ -105,6 +106,9 @@ yogachain/
 - Immediate backup copy: `schedule = {scheduleMode: Continuous, type: Immediate}`.
 - Nutanix AHV and the Application Backup Repository (RMAN / SQL plug-in) return `sessionId = 00000000-…`: no task session to derive guest processing from.
 - `v1/jobs` can take > 75 s on a loaded VBR (timeout budget inherited from Yoga Benchmark is right).
+- **`GET /jobs` returns HTTP 500** ("Source item … is not part of 'Clusters' hierarchy") on a VBR with application plug-in jobs (Oracle RMAN, SAP HANA, MongoDB, SQL plug-in): VBR expands the source objects of every job and one outside the virtual hierarchy fails the whole list. The job list therefore comes from `/jobs/states` (light, also lists plug-in jobs) with `/jobs` and `/backups` as fallbacks; `GET /jobs/{id}` is called per job and a failure only marks that job (`!` badge).
+- A CDP-only VBR exposes no jobs and no backups over REST: CDP policies and replicas are not backup chains (phase 3). The console says so instead of showing an empty screen.
+- Unknown `EJobType` values never break the inventory: they fall into a generic category (CDP policy, Replica, Application backup, Kubernetes backup, Cloud backup, Other).
 
 ## Pending / to validate in a lab (`// LAB` in the code)
 

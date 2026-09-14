@@ -144,6 +144,17 @@ func (s *Server) inventory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, inv)
 }
 
+// inventoryProgress: estado de la carga del inventario (la UI lo consulta cada
+// segundo mientras espera /inventory para mostrar una barra en vez de una
+// pantalla vacia; en el campo la carga tardo 25 s y /jobs puede irse a 75 s).
+func (s *Server) inventoryProgress(w http.ResponseWriter, r *http.Request) {
+	sess, ok := s.session(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, chain.InventoryProgress(sess))
+}
+
 func (s *Server) inventoryRefresh(w http.ResponseWriter, r *http.Request) {
 	sess, ok := s.session(w, r)
 	if !ok {

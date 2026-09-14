@@ -88,7 +88,9 @@
   .badge { display:inline-block; font-size:10.5px; padding:1px 6px; border-radius:4px; background:var(--panel2); color:var(--muted); vertical-align:1px; margin-left:6px; font-weight:600; }
   .badge.bad { background:var(--bad-soft); color:var(--red); }
   .badge.gfs { background:var(--warn-soft); color:var(--amber); }
-  .badge.app { background:var(--ok-soft); color:var(--green); font-family:ui-monospace,monospace; }
+  /* FIELD: la clase del badge era "app" y chocaba con .app (layout de pantalla): el badge se estiraba a toda la altura. */
+  .badge.tag { background:var(--ok-soft); color:var(--green); font-family:ui-monospace,monospace; }
+  .badge.warn { background:var(--warn-soft); color:var(--amber); }
   .rail .foot { padding:10px 16px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; display:flex; justify-content:space-between; align-items:center; }
 
   /* --- main --- */
@@ -169,6 +171,17 @@
   .tip.show { opacity:1; }
   .tip .warnt { color:var(--red); }
   .empty-tl { padding:40px; color:var(--muted); text-align:center; }
+  /* barra de carga (inventario inicial y paginas de restore points) */
+  .progress { position:absolute; left:0; right:0; top:0; height:3px; background:var(--panel2); overflow:hidden; z-index:5; }
+  .progress i { display:block; height:100%; background:var(--green); width:0; transition:width .4s; }
+  .progress.indet i { width:30%; animation:slide 1.2s infinite linear; }
+  @keyframes slide { from { transform:translateX(-100%); } to { transform:translateX(400%); } }
+  .loadcard { max-width:520px; margin:60px auto; text-align:center; }
+  .loadcard .bar { height:8px; background:var(--panel2); border-radius:4px; overflow:hidden; margin:14px 0 8px; }
+  .loadcard .bar i { display:block; height:100%; background:var(--green); border-radius:4px; transition:width .4s; }
+  .loadcard .stage { color:var(--muted); font-size:13px; min-height:18px; }
+  .loadcard .pct { font-size:26px; font-weight:600; }
+  .main { position:relative; }
 
   /* --- detalle --- */
   .detail { background:var(--sidebar); border-left:1px solid var(--border); display:flex; flex-direction:column; min-height:0; overflow:auto; }
@@ -252,6 +265,16 @@
   </div>
 </div>
 
+<!-- Cargando inventario -->
+<div id="loadView" class="loadcard" style="display:none;">
+  <div class="card">
+    <div class="pct" id="loadPct">0%</div>
+    <div class="bar"><i id="loadBar"></i></div>
+    <div class="stage" id="loadStage"></div>
+    <div class="muted" style="font-size:12px;margin-top:10px" data-i18n="load.hint">Leyendo repositorios, jobs, backups y objetos desde la REST API. En un VBR cargado /jobs puede tardar más de un minuto.</div>
+  </div>
+</div>
+
 <!-- Con sesion: rail + timeline + detalle -->
 <div id="appView" class="app" style="display:none;">
   <aside class="rail">
@@ -289,6 +312,7 @@
       <span><i class="sw aafail"></i><span data-i18n="lg.crash">Crash-consistent</span></span>
       <span><i class="sw logs"></i><span data-i18n="lg.logs">Log backup</span></span>
     </div>
+    <div class="progress" id="tlProgress" style="display:none"><i></i></div>
     <div class="tl-wrap"><div class="tl-scroll" id="scroll"><div class="tl" id="tl"></div></div></div>
   </main>
 
@@ -314,6 +338,7 @@ const I18N = {
     'form.host':'Host / IP del VBR','form.port':'Puerto','form.user':'Usuario','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negocia la más alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositorio','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositorios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiencia','mode.app':'Aplicación',
+    'load.hint':'Leyendo repositorios, jobs, backups y objetos desde la REST API. En un VBR cargado /jobs puede tardar más de un minuto.','load.repos':'Repositorios','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads por backup','load.done':'Listo','load.error':'Error','job.detailerr':'VBR no pudo describir este job por REST (se muestra con datos básicos):','job.frombackup':'Job tomado de /backups: no aparece en la lista de jobs (política de plug-in, AHV o backup importado).','inv.empty':'Este VBR no expone jobs ni backups por REST (¿solo políticas CDP o réplicas?). CDP y réplicas llegan en la fase 3.',
     'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup a cinta','kind.filetape':'Archivos a cinta','kind.agent':'Backup de agente','kind.nas':'Backup de file share','kind.obj':'Backup de object storage','kind.entra':'Backup de Entra ID','kind.replica':'Réplica (sin cadena de backup)','kind.sure':'SureBackup (sin cadena de backup)','tl.nochain':'Este job no genera restore points de backup (réplica / SureBackup). Las réplicas llegan en la fase 3.',
     'lg.full':'Full activo','lg.synth':'Full sintético','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Hueco vs. RPO','lg.imm':'Inmutable','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
     'k.job':'Job','k.vm':'Workload','k.repo':'Repositorio','k.lanes':'{n} carriles','k.loading':'cargando {n}/{t}',
@@ -349,6 +374,7 @@ const I18N = {
     'form.host':'VBR host / IP','form.port':'Port','form.user':'Username','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negotiates the highest)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repository','rail.search':'Search…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositories','rail.of':'{n} of {t}',
     'mode.type':'Type','mode.eff':'Efficiency','mode.app':'Application',
+    'load.hint':'Reading repositories, jobs, backups and objects from the REST API. On a loaded VBR /jobs can take over a minute.','load.repos':'Repositories','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads per backup','load.done':'Done','load.error':'Error','job.detailerr':'VBR could not describe this job over REST (shown with basic data):','job.frombackup':'Job taken from /backups: it is not in the job list (plug-in policy, AHV or imported backup).','inv.empty':'This VBR exposes no jobs or backups over REST (CDP policies or replicas only?). CDP and replicas arrive in phase 3.',
     'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup to tape','kind.filetape':'File to tape','kind.agent':'Agent backup','kind.nas':'File share backup','kind.obj':'Object storage backup','kind.entra':'Entra ID backup','kind.replica':'Replica (no backup chain)','kind.sure':'SureBackup (no backup chain)','tl.nochain':'This job produces no backup restore points (replica / SureBackup). Replicas arrive in phase 3.',
     'lg.full':'Active full','lg.synth':'Synthetic full','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Gap vs. RPO','lg.imm':'Immutable','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
     'k.job':'Job','k.vm':'Workload','k.repo':'Repository','k.lanes':'{n} lanes','k.loading':'loading {n}/{t}',
@@ -384,6 +410,7 @@ const I18N = {
     'form.host':'Host / IP do VBR','form.port':'Porta','form.user':'Usuário','form.pass':'Senha','form.apiver':'Versão da API','conn.apiauto':'auto (negocia a mais alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositório','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositórios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiência','mode.app':'Aplicação',
+    'load.hint':'Lendo repositórios, jobs, backups e objetos da REST API. Em um VBR carregado /jobs pode levar mais de um minuto.','load.repos':'Repositórios','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads por backup','load.done':'Pronto','load.error':'Erro','job.detailerr':'O VBR não conseguiu descrever este job via REST (exibido com dados básicos):','job.frombackup':'Job obtido de /backups: não aparece na lista de jobs (política de plug-in, AHV ou backup importado).','inv.empty':'Este VBR não expõe jobs nem backups via REST (apenas políticas CDP ou réplicas?). CDP e réplicas chegam na fase 3.',
     'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup em fita','kind.filetape':'Arquivos em fita','kind.agent':'Backup de agente','kind.nas':'Backup de file share','kind.obj':'Backup de object storage','kind.entra':'Backup do Entra ID','kind.replica':'Réplica (sem cadeia de backup)','kind.sure':'SureBackup (sem cadeia de backup)','tl.nochain':'Este job não gera restore points de backup (réplica / SureBackup). Réplicas chegam na fase 3.',
     'lg.full':'Full ativo','lg.synth':'Full sintético','lg.inc':'Incremental','lg.copy':'Backup copy','lg.gap':'Lacuna vs. RPO','lg.imm':'Imutável','lg.appok':'App-consistent','lg.crash':'Crash-consistent','lg.logs':'Log backup',
     'k.job':'Job','k.vm':'Workload','k.repo':'Repositório','k.lanes':'{n} faixas','k.loading':'carregando {n}/{t}',
@@ -481,9 +508,10 @@ async function doConnect(demo) {
     sessionId = r.session_id;
     $('pass').value = '';
     connState = { where: demo ? 'demo-vbr' : `${$('host').value.trim()}:${$('port').value || 9419} · REST ${r.api_version}` };
-    $('connectView').style.display = 'none'; $('appView').style.display = 'grid'; $('btnDisconnect').style.display = ''; $('btnDiag').style.display = '';
+    $('connectView').style.display = 'none'; $('btnDisconnect').style.display = ''; $('btnDiag').style.display = '';
     applyI18n();
-    S.inv = await getJSON(`${BACKEND}/api/${sessionId}/inventory`);
+    S.inv = await loadInventory(`${BACKEND}/api/${sessionId}/inventory`);
+    $('loadView').style.display = 'none'; $('appView').style.display = 'grid';
     TODAY = new Date();
     S.selectedId = (S.inv.jobs[0] || {}).id || null;
     await selectAndLoad();
@@ -492,17 +520,37 @@ async function doConnect(demo) {
     if (sessionId) await disconnect();
   } finally { $('btnConnect').disabled = $('btnDemo').disabled = false; }
 }
+// loadInventory: pide el inventario y, mientras tanto, muestra la barra con el
+// progreso que publica el backend (/inventory/progress) cada 700 ms.
+async function loadInventory(url) {
+  $('loadView').style.display = ''; $('appView').style.display = 'none';
+  $('loadPct').textContent = '0%'; $('loadBar').style.width = '0%'; $('loadStage').textContent = '…';
+  const timer = setInterval(async () => {
+    try {
+      const p = await getJSON(`${BACKEND}/api/${sessionId}/inventory/progress`);
+      const pct = Math.max(0, Math.min(100, p.percent || 0));
+      $('loadPct').textContent = pct + '%'; $('loadBar').style.width = pct + '%';
+      const stage = t('load.' + p.stage) !== 'load.' + p.stage ? t('load.' + p.stage) : p.stage;
+      $('loadStage').textContent = `${stage}${p.total ? ` ${p.done}/${p.total}` : ''}${p.message ? ' · ' + p.message : ''}`;
+    } catch (_) {}
+  }, 700);
+  try { return await getJSON(url); } finally { clearInterval(timer); }
+}
 async function disconnect() {
   if (sessionId) { try { await fetch(`${BACKEND}/api/${sessionId}/disconnect`, { method:'POST' }); } catch (_) {} }
   sessionId = null; connState = null; S.inv = null; S.rps = []; S.selectedRp = null; S.detail = null;
-  $('connectView').style.display = ''; $('appView').style.display = 'none'; $('btnDisconnect').style.display = 'none'; $('btnDiag').style.display = 'none';
+  $('connectView').style.display = ''; $('appView').style.display = 'none'; $('loadView').style.display = 'none'; $('btnDisconnect').style.display = 'none'; $('btnDiag').style.display = 'none';
   applyI18n();
 }
 // Diagnostico (alpha): abre el bundle JSON (el server lo manda como descarga).
 function downloadDiagnostics() { if (sessionId) window.open(`${BACKEND}/api/${sessionId}/diagnostics`, '_blank'); }
 async function refreshInventory() {
   if (!sessionId) return;
-  S.inv = await postJSON(`${BACKEND}/api/${sessionId}/inventory/refresh`);
+  await fetch(`${BACKEND}/api/${sessionId}/inventory/refresh`, { method:'POST' }).catch(() => {});
+  S.inv = await loadInventory(`${BACKEND}/api/${sessionId}/inventory`);
+  $('loadView').style.display = 'none'; $('appView').style.display = 'grid';
+  const cur = ({ job:S.inv.jobs, vm:S.inv.vms, repo:S.inv.repos })[S.pivot];
+  if (!byId(cur, S.selectedId)) S.selectedId = (cur[0] || {}).id || null;
   await selectAndLoad();
 }
 
@@ -513,17 +561,21 @@ async function selectAndLoad() {
   renderList(); renderTimeline(true); renderDetail();
   if (!S.selectedId) return;
   let skip = 0, total = 0;
+  const pb = $('tlProgress'); pb.style.display = ''; pb.classList.add('indet'); pb.firstElementChild.style.width = '';
   try {
     do {
       const page = await getJSON(`${BACKEND}/api/${sessionId}/restore-points?pivot=${S.pivot}&id=${encodeURIComponent(S.selectedId)}&days=${S.days}&skip=${skip}&limit=100${S.mode === 'app' ? '&aaip=1' : ''}`);
       if (seq !== S.loadSeq) return; // el usuario cambio de seleccion mientras cargaba
       total = page.total; S.total = total;
       S.rps = S.rps.concat(page.data); skip += page.data.length;
+      pb.classList.remove('indet'); pb.firstElementChild.style.width = (total ? Math.round(skip / total * 100) : 100) + '%';
       renderTimeline();
       if (!page.data.length) break;
     } while (skip < total);
   } catch (e) {
     if (seq === S.loadSeq) $('crumb').innerHTML += ` <span class="loading" style="background:var(--bad-soft);color:var(--red)">${esc(e.message)}</span>`;
+  } finally {
+    if (seq === S.loadSeq) setTimeout(() => { pb.style.display = 'none'; }, 400);
   }
 }
 
@@ -545,14 +597,16 @@ $('q').addEventListener('input', e => { S.query = e.target.value.toLowerCase(); 
 function renderList() {
   if (!S.inv) return;
   let items = [], title = '';
-  if (S.pivot === 'job') { title = t('rail.jobs'); items = S.inv.jobs.map(j => ({ id:j.id, n:j.name, s:`${kindLabel(j)}${j.repoName ? ' · ' + j.repoName : ''}`, c: j.noChain ? '' : `${(j.vmIds||[]).length}`, cls: j.noChain ? 'nochain' : '', badge: j.aaip && j.aaip.on ? 'AAIP' : j.gfs !== '—' ? 'GFS' : null })); }
+  if (S.pivot === 'job') { title = t('rail.jobs'); items = S.inv.jobs.map(j => ({ id:j.id, n:j.name, s:`${kindLabel(j)}${j.repoName ? ' · ' + j.repoName : ''}`, c: j.noChain ? '' : `${(j.vmIds||[]).length}`, cls: j.noChain ? 'nochain' : '',
+      badge: j.detailError ? '!' : j.aaip && j.aaip.on ? 'AAIP' : j.gfs !== '—' ? 'GFS' : null,
+      badgeTitle: j.detailError ? t('job.detailerr') + ' ' + j.detailError : j.fromBackup ? t('job.frombackup') : '' })); }
   if (S.pivot === 'vm') { title = t('rail.vms'); items = S.inv.vms.map(v => ({ id:v.id, n:v.name, s:[v.platform, v.os].filter(Boolean).join(' · '), c: `${(v.jobIds||[]).length}`, badge: v.app || null })); }
   if (S.pivot === 'repo') { title = t('rail.repos'); items = S.inv.repos.map(r => ({ id:r.id, n:r.name, s:`${r.type}${r.usedGB ? ' · ' + fmtSize(r.usedGB) : ''}`, badge: r.immDays ? `imm ${r.immDays}d` : null })); }
   $('railTitle').textContent = title;
   const shown = items.filter(i => !S.query || i.n.toLowerCase().includes(S.query) || (i.s||'').toLowerCase().includes(S.query));
   $('railCount').textContent = shown.length;
   $('pageInfo').textContent = tp('rail.of', { n: shown.length, t: items.length });
-  $('list').innerHTML = shown.map(i => `<button class="item ${i.id === S.selectedId ? 'on' : ''} ${i.cls || ''}" data-id="${esc(i.id)}"><span class="n">${esc(i.n)}${i.badge ? `<span class="badge ${i.badge === 'GFS' ? 'gfs' : /^imm/.test(i.badge) ? '' : 'app'}">${esc(i.badge)}</span>` : ''}</span><span class="s">${esc(i.s)}</span>${i.c ? `<span class="c mono">${esc(i.c)}</span>` : ''}</button>`).join('');
+  $('list').innerHTML = shown.map(i => `<button class="item ${i.id === S.selectedId ? 'on' : ''} ${i.cls || ''}" data-id="${esc(i.id)}"><span class="n">${esc(i.n)}${i.badge ? `<span class="badge ${i.badge === 'GFS' ? 'gfs' : /^imm/.test(i.badge) ? '' : i.badge === '!' ? 'warn' : 'tag'}" ${i.badgeTitle ? `title="${attrTxt(i.badgeTitle)}"` : ''}>${esc(i.badge)}</span>` : ''}</span><span class="s">${esc(i.s)}</span>${i.c ? `<span class="c mono">${esc(i.c)}</span>` : ''}</button>`).join('');
   $('list').querySelectorAll('.item').forEach(b => b.addEventListener('click', async () => { S.selectedId = b.dataset.id; await selectAndLoad(); }));
 }
 
@@ -637,11 +691,11 @@ function renderTimeline(loading) {
   ].join('');
 
   const selJob = S.pivot === 'job' && byId(S.inv.jobs, S.selectedId);
-  if (!L.lanes.length) { $('tl').innerHTML = `<div class="empty-tl" style="grid-column:1/-1">${selJob && selJob.noChain ? t('tl.nochain') : S.selectedId ? (loading ? '…' : t('tl.empty')) : t('tl.nolist')}</div>`; return; }
+  if (!L.lanes.length) { const emptyInv = !S.inv.jobs.length && !S.inv.vms.length; $('tl').innerHTML = `<div class="empty-tl" style="grid-column:1/-1">${emptyInv ? t('inv.empty') : selJob && selJob.noChain ? t('tl.nochain') : S.selectedId ? (loading ? '…' : t('tl.empty')) : t('tl.nolist')}</div>`; return; }
   const dayCells = withText => { let s = ''; for (let i = 0; i <= S.days; i++) { const v = new Date(start.getTime() + i * DAY); const wk = v.getDay() === 0 || v.getDay() === 6, first = i === 0 || v.getDate() === 1, today = v.toDateString() === TODAY.toDateString(); s += `<div class="day ${wk ? 'wk' : ''} ${first ? 'm' : ''} ${today ? 'today' : ''}" style="left:${i * PX}px;width:${PX}px">${withText ? (first ? `<b>${v.toLocaleDateString(LOCALE[LANG], { month:'short' })}</b>` : '') + (today ? '●' : v.getDate()) : ''}</div>`; } return s; };
   let h = `<div class="axis lbl">${tp('k.lanes',{n:L.lanes.length})}</div><div class="axis"><div class="days" style="width:${width}px">${dayCells(true)}</div></div>`;
   L.lanes.forEach(l => {
-    h += `<div class="lbl"><span class="n">${esc(l.n)}${l.app ? `<span class="badge app">${esc(l.app)}</span>` : ''}</span><span class="s">${esc(l.s)}</span><span class="cnt mono">${l.pts.length}</span></div><div class="lane" style="width:${width}px">${dayCells(false)}`;
+    h += `<div class="lbl"><span class="n">${esc(l.n)}${l.app ? `<span class="badge tag">${esc(l.app)}</span>` : ''}</span><span class="s">${esc(l.s)}</span><span class="cnt mono">${l.pts.length}</span></div><div class="lane" style="width:${width}px">${dayCells(false)}`;
     if (S.mode === 'app' && l.logs && l.pts.length) {
       const first = Math.max(0, Math.min(...l.pts.map(r => x(d(r.date)))));
       h += `<i class="logband" style="left:${first}px;width:${Math.max(0, x(TODAY) - first)}px;background-size:${Math.max(PX * l.logs / 1440, 2)}px 100%" title="${attrTxt(tp('logs.title',{m:l.logs}))}"></i>`;

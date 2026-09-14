@@ -131,8 +131,38 @@ func TestRatioSemantics(t *testing.T) {
 	if k, nc := jobKind("VSphereReplica"); k != "Replica" || !nc {
 		t.Fatalf("VSphereReplica -> %q %v", k, nc)
 	}
+	// FIELD (vbrdb-01 / cdp): tipos que no deben romper nunca el inventario
+	for typ, want := range map[string]string{"VSphereCdpReplica": "CDP policy", "CdpPolicy": "CDP policy", "Unknown": "Application backup",
+		"OracleRmanBackup": "Application backup", "SapHanaBackup": "Application backup", "MongoDbBackup": "Application backup",
+		"HyperVReplica": "Replica", "SureBackup": "SureBackup", "KastenBackup": "Kubernetes backup", "AzureVmBackup": "Cloud backup", "WeirdNewType": "Other (WeirdNewType)"} {
+		if k, _ := jobKind(typ); k != want {
+			t.Fatalf("jobKind(%s) = %q, esperado %q", typ, k, want)
+		}
+	}
+	for _, typ := range []string{"VSphereCdpReplica", "HyperVReplica", "SureBackupContentScan"} {
+		if _, nc := jobKind(typ); !nc {
+			t.Fatalf("jobKind(%s) deberia ser sin cadena", typ)
+		}
+	}
 	if got := schedText(obj{"scheduleMode": "Continuous", "type": "Immediate"}); got != "Immediate" {
 		t.Fatalf("schedText copy inmediato = %q", got)
+	}
+}
+
+func TestProgress(t *testing.T) {
+	s := demoSession()
+	if p := InventoryProgress(s); p.Stage != "idle" {
+		t.Fatalf("progreso inicial = %+v", p)
+	}
+	if _, err := LoadInventory(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	if p := InventoryProgress(s); p.Stage != "done" || p.Percent != 100 {
+		t.Fatalf("progreso final = %+v", p)
+	}
+	Refresh(s)
+	if p := InventoryProgress(s); p.Stage != "idle" {
+		t.Fatalf("progreso tras refresh = %+v", p)
 	}
 }
 

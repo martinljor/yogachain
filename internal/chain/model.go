@@ -31,9 +31,13 @@ type Job struct {
 	Comp      string     `json:"comp"`
 	Block     string     `json:"block"`
 	Enc       bool       `json:"enc"`
-	Aaip      AaipConfig `json:"aaip"`
-	VMIDs     []string   `json:"vmIds"`
-	BackupIDs []string   `json:"backupIds"`
+	Aaip        AaipConfig `json:"aaip"`
+	VMIDs       []string   `json:"vmIds"`
+	BackupIDs   []string   `json:"backupIds"`
+	Workload    string     `json:"workload,omitempty"`    // EJobWorkload de /jobs/states (VM, Application, File...)
+	LastResult  string     `json:"lastResult,omitempty"`  // de /jobs/states
+	DetailError string     `json:"detailError,omitempty"` // GET /jobs/{id} fallo: VBR no puede describir el job por REST
+	FromBackup  bool       `json:"fromBackup,omitempty"`  // job sintetizado desde /backups (no aparece en /jobs)
 }
 
 type Workload struct {

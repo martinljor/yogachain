@@ -37,6 +37,7 @@ func (s *Server) routes(web fs.FS) {
 	// Inventario normalizado: jobs (storage + guest processing), workloads, repos
 	m.HandleFunc("GET /api/{session}/inventory", s.inventory)
 	m.HandleFunc("POST /api/{session}/inventory/refresh", s.inventoryRefresh)
+	m.HandleFunc("GET /api/{session}/inventory/progress", s.inventoryProgress)
 
 	// Restore points por pivot (paginado de a 100) y detalle de uno
 	m.HandleFunc("GET /api/{session}/restore-points", s.restorePoints)
