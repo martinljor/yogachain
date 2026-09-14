@@ -1,41 +1,54 @@
 name: release
 # Al empujar un tag vX.Y.Z[-alpha]: compila linux/windows/macos con build.sh y
 # publica un GitHub Release con los binarios, el zip de Windows y SHA256SUMS.txt.
+# Tambien se puede lanzar a mano (Actions -> release -> Run workflow) indicando el
+# tag, por si el push del tag no disparo el evento (pasa en el primer push del repo).
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag a publicar (ej: v0.1.0-alpha); debe existir en el repo'
+        required: true
 permissions:
   contents: write
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
       - name: test
         run: go test ./... -count=1
       - name: version matches tag
         run: |
           V=$(grep -oE 'const version = "[^"]+"' main.go | sed -E 's/.*"([^"]+)".*/\1/')
-          [ "v$V" = "${GITHUB_REF_NAME}" ] || { echo "main.go version v$V != tag ${GITHUB_REF_NAME}"; exit 1; }
+          [ "v$V" = "$TAG" ] || { echo "main.go version v$V != tag $TAG"; exit 1; }
       - name: build
         run: ./build.sh
       - name: release
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}
+          tag_name: ${{ env.TAG }}
+          prerelease: ${{ contains(env.TAG, 'alpha') || contains(env.TAG, 'beta') }}
           generate_release_notes: true
           body: |
-            **EXPERIMENTAL — alpha, solo lectura, uso en laboratorio.**
+            **EXPERIMENTAL — alpha, read-only, lab use only.**
 
-            Descargá el binario de tu SO, ejecutalo y se abre `http://localhost:8001`.
-            Windows: usar el `.zip` si el navegador bloquea el `.exe`. Linux/macOS: `chmod +x`.
+            Download the binary for your OS, run it, and `http://localhost:8001` opens.
+            Windows: use the `.zip` if the browser blocks the `.exe`. Linux/macOS: `chmod +x`.
 
-            Si algo falla: botón **Diagnóstico** en la consola (descarga un JSON sin credenciales
-            con la traza de llamadas REST y muestras del schema) + el archivo `yogachain.log`
-            que queda al lado del binario. Adjuntalos en un issue.
+            If something fails: **Diagnostics** button in the console (downloads a JSON without
+            credentials, with the REST call trace and schema samples) + the `yogachain.log` file
+            next to the binary. Attach both to an issue.
           files: |
             dist/yogachain-*
             dist/SHA256SUMS.txt

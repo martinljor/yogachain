@@ -11,6 +11,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
       - name: gofmt (aviso, no bloquea en alpha)
         continue-on-error: true
         run: test -z "$(gofmt -l .)" || (gofmt -d . && exit 1)
