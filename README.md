@@ -28,6 +28,7 @@ and **Repository** — on a per-lane timeline. Sibling of
 | **Type** | Active full / synthetic full / incremental / GFS / copy / tape, gaps vs. RPO, malware, immutability |
 | **Efficiency** | Total reduction per restore point (amber → green), `compressRatio` and `dedupRatio` from `backupFiles`, source data vs. on-disk size |
 | **Application** | Application consistency per restore point (derived from the task session logs), log backup cadence (SQL / Oracle / PostgreSQL) and which restore options each point enables |
+| **Retention** | GFS points per tier (weekly / monthly / yearly) with the estimated expiry from the job policy, points expiring within 30 days, and the periods that are missing their GFS point |
 
 Detail panel per restore point: backup file, chain and how many files a restore has to read,
 where else the same data exists (S3 copy, tape), the job's `appAwareProcessing` settings
@@ -93,6 +94,7 @@ yogachain/
 | GET | `/api/{session}/inventory/progress` | `{stage, done, total, message, percent}` while the inventory loads (drives the progress bar) |
 | GET | `/api/{session}/restore-points?pivot=job\|vm\|repo&id=…&days=30&skip=0&limit=100[&aaip=1]` | normalized restore points, paged by 100 |
 | GET | `/api/{session}/restore-points/{rp}` | detail: restore point + AAIP result + chain + other locations |
+| GET | `/api/{session}/retention?pivot=job\|vm\|repo&id=…` | GFS retention view: tiers, estimated expiry (creation + `keepForNumberOf…`), expected vs. missing periods (Job pivot) |
 | GET | `/api/{session}/raw/{path...}` | read-only passthrough to the REST API (e.g. `raw/v1/backups`) to inspect the real schema |
 | GET | `/api/{session}/diagnostics` | alpha diagnostics bundle (see below) |
 

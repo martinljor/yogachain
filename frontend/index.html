@@ -130,6 +130,20 @@
   .sw.aafail { background:var(--bad-soft); border:2px dashed var(--red); }
   .sw.logs { width:1px; height:10px; background:var(--green); border-radius:0; }
 
+  .ret-wrap { flex:1; margin:0 18px 12px; overflow:auto; min-height:140px; display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:12px; align-content:start; }
+  .ret-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+  .ret-card h3 { display:flex; align-items:center; gap:10px; font-size:14px; }
+  .ret-card h3 .badge { margin:0; }
+  .ret-card table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
+  .ret-card th { text-align:left; color:var(--muted); font-weight:600; font-size:11px; letter-spacing:.06em; text-transform:uppercase; padding:4px 6px; border-bottom:1px solid var(--border); }
+  .ret-card td { padding:5px 6px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .ret-card tr:hover td { background:var(--panel2); cursor:pointer; }
+  .ret-card td.exp-soon { color:var(--amber); font-weight:600; } .ret-card td.exp-now { color:var(--red); font-weight:600; } .ret-card td.exp-ok { color:var(--green); }
+  .ret-card .missing { margin-top:8px; font-size:12.5px; color:var(--amber); }
+  .ret-card .missing b { color:var(--red); }
+  .ret-card .ok { margin-top:8px; font-size:12.5px; color:var(--green); }
+  .ret-empty { grid-column:1/-1; padding:40px; color:var(--muted); text-align:center; }
+  .ret-soon { grid-column:1/-1; background:var(--warn-soft); border:1px solid var(--amber); border-radius:8px; padding:10px 14px; font-size:13px; }
   .tl-wrap { flex:1; margin:0 18px 12px; background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; min-height:140px; }
   .tl-scroll { overflow:auto; flex:1; }
   .tl { display:grid; grid-template-columns:250px max-content; }
@@ -305,7 +319,7 @@
       <div class="stats" id="stats"></div>
     </div>
     <div class="legend">
-      <span class="modes" role="group"><button class="on" data-mode="type" data-i18n="mode.type">Tipo</button><button data-mode="eff" data-i18n="mode.eff">Eficiencia</button><button data-mode="app" data-i18n="mode.app">Aplicación</button></span>
+      <span class="modes" role="group"><button class="on" data-mode="type" data-i18n="mode.type">Tipo</button><button data-mode="eff" data-i18n="mode.eff">Eficiencia</button><button data-mode="app" data-i18n="mode.app">Aplicación</button><button data-mode="ret" data-i18n="mode.ret">Retención</button></span>
       <span class="modes" role="group" style="margin-left:4px"><button data-days="14">14d</button><button data-days="30" class="on">30d</button><button data-days="90">90d</button><button data-days="365">1y</button><button data-days="3650" data-i18n="range.all">Todo</button></span>
       <span class="sep"></span>
       <span><i class="sw full"></i><span data-i18n="lg.full">Full activo</span></span>
@@ -325,6 +339,7 @@
     </div>
     <div class="progress" id="tlProgress" style="display:none"><i></i></div>
     <div class="tl-wrap"><div class="tl-scroll" id="scroll"><div class="tl" id="tl"></div></div></div>
+    <div class="ret-wrap" id="retView" style="display:none"></div>
     <section class="detail empty-pane" id="detail"></section>
   </main>
 </div>
@@ -348,6 +363,7 @@ const I18N = {
     'form.host':'Host / IP del VBR','form.port':'Puerto','form.user':'Usuario','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negocia la más alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositorio','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositorios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiencia','mode.app':'Aplicación',
+    'mode.ret':'Retención','ret.title':'Retención GFS','ret.weekly':'Semanal','ret.monthly':'Mensual','ret.quarterly':'Trimestral','ret.yearly':'Anual','ret.keep':'retener {n}','ret.have':'{h} de {n} períodos cubiertos','ret.nopolicy':'Este pivot no tiene GFS configurado ni puntos GFS. Los restore points siguen la retención simple del job (días o cantidad).','ret.nopoints':'Política configurada pero todavía no hay puntos GFS (el primero se crea en el próximo full del período).','ret.soon':'{n} punto(s) GFS vencen en los próximos 30 días','ret.missing':'Falta GFS en: {p}','ret.complete':'Todos los períodos esperados tienen su punto GFS','ret.col.period':'Período','ret.col.date':'Creado','ret.col.wl':'Workload','ret.col.size':'En disco','ret.col.repo':'Repositorio','ret.col.exp':'Vence','ret.days':'{d} d','ret.expired':'vencido','ret.noexp':'sin política','ret.note':'El vencimiento se estima con la política GFS del job (creación + retención del nivel); la API no expone la fecha real. Los períodos esperados/faltantes se calculan solo en el pivot Job.','ret.loading':'Leyendo toda la historia del pivot…',
     'range.all':'Todo','tl.cluster':'{n} puntos el mismo día · clic para ver el más reciente',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Backup de plug-in (RMAN / backint / SQL / MongoDB): VBR expone los archivos, no restore points. Qué pieza es full, incremental o archive log lo sabe el catálogo de la aplicación, no la API.',
     'load.hint':'Leyendo repositorios, jobs, backups y objetos desde la REST API. En un VBR cargado /jobs puede tardar más de un minuto.','load.repos':'Repositorios','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads por backup','load.done':'Listo','load.error':'Error','job.detailerr':'VBR no pudo describir este job por REST (se muestra con datos básicos):','job.frombackup':'Job tomado de /backups: no aparece en la lista de jobs (política de plug-in, AHV o backup importado).','inv.empty':'Este VBR no expone jobs ni backups por REST (¿solo políticas CDP o réplicas?). CDP y réplicas llegan en la fase 3.',
@@ -386,6 +402,7 @@ const I18N = {
     'form.host':'VBR host / IP','form.port':'Port','form.user':'Username','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negotiates the highest)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repository','rail.search':'Search…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositories','rail.of':'{n} of {t}',
     'mode.type':'Type','mode.eff':'Efficiency','mode.app':'Application',
+    'mode.ret':'Retention','ret.title':'GFS retention','ret.weekly':'Weekly','ret.monthly':'Monthly','ret.quarterly':'Quarterly','ret.yearly':'Yearly','ret.keep':'keep {n}','ret.have':'{h} of {n} periods covered','ret.nopolicy':'This pivot has no GFS policy and no GFS points. Restore points follow the job\'s simple retention (days or count).','ret.nopoints':'Policy configured but no GFS points yet (the first one is created on the next full of the period).','ret.soon':'{n} GFS point(s) expire within 30 days','ret.missing':'GFS missing for: {p}','ret.complete':'Every expected period has its GFS point','ret.col.period':'Period','ret.col.date':'Created','ret.col.wl':'Workload','ret.col.size':'On disk','ret.col.repo':'Repository','ret.col.exp':'Expires','ret.days':'{d} d','ret.expired':'expired','ret.noexp':'no policy','ret.note':'Expiry is estimated from the job GFS policy (creation + tier retention); the API does not expose the real date. Expected/missing periods are computed for the Job pivot only.','ret.loading':'Reading the whole history of this pivot…',
     'range.all':'All','tl.cluster':'{n} points on the same day · click for the latest',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Plug-in backup (RMAN / backint / SQL / MongoDB): VBR exposes backup files, not restore points. Which piece is a full, an incremental or an archive log is known to the application catalog, not to the API.',
     'load.hint':'Reading repositories, jobs, backups and objects from the REST API. On a loaded VBR /jobs can take over a minute.','load.repos':'Repositories','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads per backup','load.done':'Done','load.error':'Error','job.detailerr':'VBR could not describe this job over REST (shown with basic data):','job.frombackup':'Job taken from /backups: it is not in the job list (plug-in policy, AHV or imported backup).','inv.empty':'This VBR exposes no jobs or backups over REST (CDP policies or replicas only?). CDP and replicas arrive in phase 3.',
@@ -424,6 +441,7 @@ const I18N = {
     'form.host':'Host / IP do VBR','form.port':'Porta','form.user':'Usuário','form.pass':'Senha','form.apiver':'Versão da API','conn.apiauto':'auto (negocia a mais alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositório','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositórios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiência','mode.app':'Aplicação',
+    'mode.ret':'Retenção','ret.title':'Retenção GFS','ret.weekly':'Semanal','ret.monthly':'Mensal','ret.quarterly':'Trimestral','ret.yearly':'Anual','ret.keep':'reter {n}','ret.have':'{h} de {n} períodos cobertos','ret.nopolicy':'Este pivot não tem GFS configurado nem pontos GFS. Os restore points seguem a retenção simples do job (dias ou quantidade).','ret.nopoints':'Política configurada mas ainda sem pontos GFS (o primeiro é criado no próximo full do período).','ret.soon':'{n} ponto(s) GFS vencem nos próximos 30 dias','ret.missing':'Falta GFS em: {p}','ret.complete':'Todos os períodos esperados têm seu ponto GFS','ret.col.period':'Período','ret.col.date':'Criado','ret.col.wl':'Workload','ret.col.size':'Em disco','ret.col.repo':'Repositório','ret.col.exp':'Vence','ret.days':'{d} d','ret.expired':'vencido','ret.noexp':'sem política','ret.note':'O vencimento é estimado pela política GFS do job (criação + retenção do nível); a API não expõe a data real. Períodos esperados/faltantes só são calculados no pivot Job.','ret.loading':'Lendo todo o histórico deste pivot…',
     'range.all':'Tudo','tl.cluster':'{n} pontos no mesmo dia · clique para ver o mais recente',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Backup de plug-in (RMAN / backint / SQL / MongoDB): o VBR expõe os arquivos, não restore points. Qual peça é full, incremental ou archive log só o catálogo da aplicação sabe, não a API.',
     'load.hint':'Lendo repositórios, jobs, backups e objetos da REST API. Em um VBR carregado /jobs pode levar mais de um minuto.','load.repos':'Repositórios','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads por backup','load.done':'Pronto','load.error':'Erro','job.detailerr':'O VBR não conseguiu descrever este job via REST (exibido com dados básicos):','job.frombackup':'Job obtido de /backups: não aparece na lista de jobs (política de plug-in, AHV ou backup importado).','inv.empty':'Este VBR não expõe jobs nem backups via REST (apenas políticas CDP ou réplicas?). CDP e réplicas chegam na fase 3.',
@@ -473,7 +491,7 @@ function setLang(l) {
   LANG = l; localStorage.setItem('lang', l);
   document.querySelectorAll('.flag').forEach(f => f.classList.toggle('active', f.dataset.lang === l));
   applyI18n();
-  if (sessionId) { renderList(); renderTimeline(); renderDetail(); }
+  if (sessionId) { renderList(); renderTimeline(); renderDetail(); if (S.mode === 'ret') renderRetention(); }
 }
 
 // --- helpers ------------------------------------------------------------------
@@ -509,7 +527,7 @@ const KIND_KEYS = { 'Backup':'kind.backup', 'Backup copy':'kind.copy', 'Backup t
 function kindLabel(j) { const k = KIND_KEYS[j.kind]; return k ? t(k) : (j.kind || j.type || ''); }
 
 // --- estado -------------------------------------------------------------------
-const S = { inv:null, pivot:'job', selectedId:null, days:30, mode:'type', query:'', rps:[], total:0, selectedRp:null, detail:null, loadSeq:0 };
+const S = { ret:null, retSeq:0, inv:null, pivot:'job', selectedId:null, days:30, mode:'type', query:'', rps:[], total:0, selectedRp:null, detail:null, loadSeq:0 };
 const byId = (arr, id) => (arr||[]).find(x => x.id === id);
 const jobOf = r => byId(S.inv.jobs, r.jobId), vmOf = r => byId(S.inv.vms, r.vmId), repoOf = r => byId(S.inv.repos, r.repoId);
 
@@ -577,6 +595,7 @@ async function selectAndLoad() {
   S.rps = []; S.total = 0; S.selectedRp = null; S.detail = null;
   renderList(); renderTimeline(true); renderDetail();
   if (!S.selectedId) return;
+  if (S.mode === 'ret') loadRetention();
   let skip = 0, total = 0;
   const pb = $('tlProgress'); pb.style.display = ''; pb.classList.add('indet'); pb.firstElementChild.style.width = '';
   try {
@@ -606,8 +625,17 @@ document.querySelectorAll('[data-days]').forEach(b => b.addEventListener('click'
 }));
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', async () => {
   S.mode = b.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b));
+  applyMode();
+  if (S.mode === 'ret') { await loadRetention(); return; }
   if (S.mode === 'app' && S.rps.some(r => !r.aaip) && S.rps.some(r => { const j = jobOf(r); return j && j.aaip && j.aaip.on !== null; })) await selectAndLoad(); else renderTimeline();
 }));
+// applyMode: la vista Retencion reemplaza la timeline (misma cabecera, stats y detalle)
+function applyMode() {
+  const ret = S.mode === 'ret';
+  document.querySelector('.tl-wrap').style.display = ret ? 'none' : '';
+  $('retView').style.display = ret ? '' : 'none';
+  document.querySelectorAll('[data-days]').forEach(b => b.disabled = ret);
+}
 $('q').addEventListener('input', e => { S.query = e.target.value.toLowerCase(); renderList(); });
 
 // --- rail ---------------------------------------------------------------------
@@ -760,6 +788,38 @@ function renderTimeline(loading) {
   requestAnimationFrame(() => { sc.scrollLeft = S.selectedRp ? keep : sc.scrollWidth; });
 }
 function moveTip(e) { const tip = $('tip'); tip.style.left = e.clientX + 'px'; tip.style.top = (e.clientY - 10) + 'px'; }
+
+// --- retencion GFS -------------------------------------------------------------
+async function loadRetention() {
+  if (!sessionId || !S.selectedId) return;
+  const seq = ++S.retSeq;
+  $('retView').innerHTML = `<div class="ret-empty">${t('ret.loading')}</div>`;
+  try {
+    const r = await getJSON(`${BACKEND}/api/${sessionId}/retention?pivot=${S.pivot}&id=${encodeURIComponent(S.selectedId)}`);
+    if (seq !== S.retSeq) return;
+    S.ret = r; renderRetention();
+  } catch (e) { if (seq === S.retSeq) $('retView').innerHTML = `<div class="ret-empty">${esc(e.message)}</div>`; }
+}
+function renderRetention() {
+  const r = S.ret, el = $('retView'); if (!r) return;
+  if (r.noPolicy) { el.innerHTML = `<div class="ret-empty">${t('ret.nopolicy')}</div>`; return; }
+  let h = '';
+  if (r.soon && r.soon.length) h += `<div class="ret-soon">⚠ ${tp('ret.soon',{n:r.soon.length})}: ${r.soon.slice(0,6).map(p => `${esc((vmOf(p)||{}).name || p.vmId)} · ${fmtD(p.date)} → ${fmtD(p.expires)}`).join(' · ')}${r.soon.length > 6 ? ' …' : ''}</div>`;
+  if (!r.tiers.length) h += `<div class="ret-empty">${t('ret.nopoints')}</div>`;
+  r.tiers.forEach(tier => {
+    const have = tier.expected ? tier.expected.length - (tier.missing || []).length : 0;
+    h += `<div class="ret-card"><h3>${t('ret.' + tier.tier.toLowerCase())}${tier.keep ? `<span class="badge gfs">${tp('ret.keep',{n:tier.keep})}</span>` : ''}<span class="muted" style="font-weight:400;font-size:12px;margin-left:auto">${tier.points.length} GFS${tier.expected && tier.expected.length ? ' · ' + tp('ret.have',{h:have,n:tier.expected.length}) : ''}</span></h3>
+      <table><thead><tr><th>${t('ret.col.period')}</th><th>${t('ret.col.date')}</th><th>${t('ret.col.wl')}</th><th>${t('ret.col.size')}</th><th>${t('ret.col.repo')}</th><th>${t('ret.col.exp')}</th></tr></thead><tbody>
+      ${tier.points.map(p => { const cls = !p.expires ? '' : p.daysLeft < 0 ? 'exp-now' : p.daysLeft <= 30 ? 'exp-soon' : 'exp-ok'; const exp = !p.expires ? t('ret.noexp') : p.daysLeft < 0 ? t('ret.expired') : `${fmtD(p.expires)} · ${tp('ret.days',{d:p.daysLeft})}`;
+        return `<tr data-rp="${esc(p.id)}"><td class="mono">${esc(p.period)}</td><td>${fmtDT(p.date)}</td><td>${esc((vmOf(p)||{}).name || p.vmId)}</td><td class="mono">${fmtSize(p.sizeGB)}</td><td>${esc((repoOf(p)||{}).name || '')}</td><td class="${cls}">${exp}</td></tr>`; }).join('')}
+      </tbody></table>
+      ${tier.expected && tier.expected.length ? (tier.missing && tier.missing.length ? `<div class="missing">${tp('ret.missing',{p:tier.missing.map(m => `<b>${esc(m)}</b>`).join(', ')})}</div>` : `<div class="ok">✓ ${t('ret.complete')}</div>`) : ''}
+    </div>`;
+  });
+  h += `<div class="note" style="grid-column:1/-1">${t('ret.note')}${r.note ? ' ' + esc(r.note) : ''}</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('tr[data-rp]').forEach(tr => tr.addEventListener('click', () => selectRp(tr.dataset.rp)));
+}
 
 // --- detalle ------------------------------------------------------------------
 async function selectRp(id) {

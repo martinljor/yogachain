@@ -43,6 +43,9 @@ func (s *Server) routes(web fs.FS) {
 	m.HandleFunc("GET /api/{session}/restore-points", s.restorePoints)
 	m.HandleFunc("GET /api/{session}/restore-points/{rp}", s.restorePoint)
 
+	// Retencion GFS por pivot: puntos por nivel, vencimiento estimado, huecos
+	m.HandleFunc("GET /api/{session}/retention", s.retention)
+
 	// Passthrough read-only a la REST API de VBR (para inspeccionar el schema real).
 	m.HandleFunc("GET /api/{session}/raw/{path...}", s.rawGet)
 

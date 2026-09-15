@@ -43,6 +43,15 @@ Header obligatorio: `x-api-version: 1.3-rev2`. Login: `POST /api/oauth2/token` (
 - **FIELD (vbrdb-01):** `GET /jobs` → 500 `Source item ... is not part of 'Clusters' hierarchy` cuando hay jobs de aplicación (plug-ins RMAN/HANA/MongoDB/SQL). `/jobs/states` no expande objetos y sí los lista (tipo `Unknown`).
 - **FIELD (cdp):** un VBR solo con políticas CDP devuelve 0 jobs y 0 backups: CDP y réplicas van por `/replicas` y `/cdp` (fase 3).
 
+## Retención GFS
+
+| Qué | Origen |
+|---|---|
+| Punto GFS y nivel | `BackupFileModel.gfsPeriods[]` (Weekly / Monthly / Quarterly / Yearly) del archivo del restore point |
+| Política | `job.storage.gfsPolicy.{weekly.keepForNumberOfWeeks, monthly.keepForNumberOfMonths, yearly.keepForNumberOfYears}` |
+| Vencimiento | **No lo expone la API.** Estimado = `creationTime` + retención del nivel. |
+| Períodos esperados / faltantes | Calculados por la tool: últimos N períodos ISO (semana / mes / año) contra los puntos existentes; solo en pivot Job (una política) |
+
 ## Backups de plug-in (FIELD vbrdb-01)
 
 | Qué | Cómo lo expone la REST API |

@@ -27,6 +27,7 @@ type Job struct {
 	RepoName  string     `json:"repoName"`
 	Sched     string     `json:"sched"`
 	GFS       string     `json:"gfs"`
+	GFSPolicy GFSPolicy  `json:"gfsPolicy"`
 	RPO       int        `json:"rpo"` // horas; VBR no expone RPO, es un parametro de la tool
 	Comp      string     `json:"comp"`
 	Block     string     `json:"block"`
@@ -38,6 +39,14 @@ type Job struct {
 	LastResult  string     `json:"lastResult,omitempty"`  // de /jobs/states
 	DetailError string     `json:"detailError,omitempty"` // GET /jobs/{id} fallo: VBR no puede describir el job por REST
 	FromBackup  bool       `json:"fromBackup,omitempty"`  // job sintetizado desde /backups (no aparece en /jobs)
+}
+
+// GFSPolicy: storage.gfsPolicy del job en numeros (0 = nivel desactivado).
+type GFSPolicy struct {
+	Enabled bool `json:"enabled"`
+	Weekly  int  `json:"weekly"`  // keepForNumberOfWeeks
+	Monthly int  `json:"monthly"` // keepForNumberOfMonths
+	Yearly  int  `json:"yearly"`  // keepForNumberOfYears
 }
 
 type Workload struct {

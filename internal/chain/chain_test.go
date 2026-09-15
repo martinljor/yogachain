@@ -170,6 +170,40 @@ func TestAppFromSettings(t *testing.T) {
 	}
 }
 
+func TestRetention(t *testing.T) {
+	ctx := context.Background()
+	s := demoSession()
+	inv, err := LoadInventory(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret, err := LoadRetention(ctx, s, inv, "job", "j7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ret.Policy.Enabled || ret.Policy.Weekly != 4 || ret.Policy.Monthly != 12 || ret.Policy.Yearly != 1 {
+		t.Fatalf("politica GFS de j7 mal mapeada: %+v", ret.Policy)
+	}
+	if ret.Total == 0 || len(ret.Tiers) == 0 {
+		t.Fatalf("sin puntos GFS en j7: %+v", ret)
+	}
+	var weekly *RetentionTier
+	for i := range ret.Tiers {
+		if ret.Tiers[i].Tier == "Weekly" {
+			weekly = &ret.Tiers[i]
+		}
+	}
+	if weekly == nil || weekly.Keep != 4 || len(weekly.Expected) != 4 || len(weekly.Points) == 0 {
+		t.Fatalf("nivel semanal: %+v", weekly)
+	}
+	if weekly.Points[0].Expires == "" || weekly.Points[0].DaysLeft > 28 {
+		t.Fatalf("vencimiento semanal mal estimado: %+v", weekly.Points[0])
+	}
+	if ret2, _ := LoadRetention(ctx, s, inv, "job", "j4"); !ret2.NoPolicy { // VDI: sin GFS
+		t.Fatalf("j4 deberia reportar sin politica: %+v", ret2)
+	}
+}
+
 func TestRatioSemantics(t *testing.T) {
 	// FIELD: 65 % restante -> 1.54x; 25 % -> 4x; 0 -> sin dato -> 1x
 	for v, want := range map[float64]float64{65: 100.0 / 65, 25: 4, 100: 1, 0: 1} {

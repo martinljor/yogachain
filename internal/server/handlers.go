@@ -245,6 +245,31 @@ func (s *Server) restorePoint(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
+// retention: ?pivot=job|vm|repo&id=... -> vista de retencion GFS (toda la historia).
+func (s *Server) retention(w http.ResponseWriter, r *http.Request) {
+	sess, ok := s.session(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	pivot, id := q.Get("pivot"), q.Get("id")
+	if pivot == "" || id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "pivot and id are required"})
+		return
+	}
+	inv, err := chain.LoadInventory(r.Context(), sess)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	ret, err := chain.LoadRetention(r.Context(), sess, inv, pivot, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ret)
+}
+
 // rawGet reenvia el JSON crudo de una ruta de la REST API (ej: /api/{s}/raw/v1/backups).
 func (s *Server) rawGet(w http.ResponseWriter, r *http.Request) {
 	sess, ok := s.session(w, r)

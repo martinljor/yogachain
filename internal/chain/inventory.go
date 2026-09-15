@@ -178,7 +178,7 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 		kind, noChain := jobKind(str(j, "type"))
 		job := Job{
 			ID: id, Name: str(j, "name"), Type: str(j, "type"), Kind: kind, NoChain: noChain, RepoID: repoID, RPO: 24,
-			Sched: schedText(sub(full, "schedule")), GFS: gfsText(sub(storage, "gfsPolicy")),
+			Sched: schedText(sub(full, "schedule")), GFS: gfsText(sub(storage, "gfsPolicy")), GFSPolicy: gfsPolicy(sub(storage, "gfsPolicy")),
 			Comp: str(adv, "compressionLevel"), Block: str(adv, "storageOptimization"),
 			Enc: boolean(sub(adv, "encryption"), "isEnabled"), Aaip: aaipConfig(full),
 			Workload: str(j, "workload"), LastResult: str(j, "lastResult"), DetailError: dbgClip(detailErr, 200),
@@ -455,6 +455,23 @@ func jobKind(t string) (kind string, noChain bool) {
 		return "Application backup", false
 	}
 	return "Other (" + t + ")", false
+}
+
+func gfsPolicy(p obj) GFSPolicy {
+	if p == nil || !boolean(p, "isEnabled") {
+		return GFSPolicy{}
+	}
+	g := GFSPolicy{Enabled: true}
+	if w := sub(p, "weekly"); boolean(w, "isEnabled") {
+		g.Weekly = int(num(w, "keepForNumberOfWeeks"))
+	}
+	if m := sub(p, "monthly"); boolean(m, "isEnabled") {
+		g.Monthly = int(num(m, "keepForNumberOfMonths"))
+	}
+	if y := sub(p, "yearly"); boolean(y, "isEnabled") {
+		g.Yearly = int(num(y, "keepForNumberOfYears"))
+	}
+	return g
 }
 
 func gfsText(p obj) string {
