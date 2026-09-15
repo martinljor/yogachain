@@ -158,6 +158,8 @@
   .day.wk { background:var(--weekend); }
   .day.m b { display:block; font-weight:600; color:var(--text); }
   .day.today { border-left:2px solid var(--green); color:var(--green); font-weight:600; }
+  .day.gapcol { background:repeating-linear-gradient(135deg, var(--panel2) 0 4px, transparent 4px 8px); color:var(--muted); font-size:10px; text-align:center; padding:6px 0 0; border-left:1px dashed var(--border); }
+  .lane .day.gapcol { font-size:0; }
   .lane { position:relative; height:52px; border-bottom:1px solid var(--border); }
   .lane .day { padding:0; font-size:0; }
   .gaprect { position:absolute; top:8px; bottom:8px; background:var(--gap); border:1px dashed var(--red); border-radius:4px; }
@@ -320,7 +322,7 @@
     </div>
     <div class="legend">
       <span class="modes" role="group"><button class="on" data-mode="type" data-i18n="mode.type">Tipo</button><button data-mode="eff" data-i18n="mode.eff">Eficiencia</button><button data-mode="app" data-i18n="mode.app">Aplicación</button><button data-mode="ret" data-i18n="mode.ret">Retención</button></span>
-      <span class="modes" role="group" style="margin-left:4px"><button data-days="14">14d</button><button data-days="30" class="on">30d</button><button data-days="90">90d</button><button data-days="365">1y</button><button data-days="3650" data-i18n="range.all">Todo</button></span>
+      <span class="modes" role="group" style="margin-left:4px"><button data-days="7">7d</button><button data-days="30" class="on">30d</button><button data-days="90">90d</button><button data-days="365">1y</button><button data-days="3650" data-i18n="range.all">Todo</button></span>
       <span class="sep"></span>
       <span><i class="sw full"></i><span data-i18n="lg.full">Full activo</span></span>
       <span><i class="sw synth"></i><span data-i18n="lg.synth">Full sintético</span></span>
@@ -363,6 +365,7 @@ const I18N = {
     'form.host':'Host / IP del VBR','form.port':'Puerto','form.user':'Usuario','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negocia la más alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositorio','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositorios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiencia','mode.app':'Aplicación',
+    'tl.gapcol':'+{n} d',
     'mode.ret':'Retención','ret.title':'Retención GFS','ret.weekly':'Semanal','ret.monthly':'Mensual','ret.quarterly':'Trimestral','ret.yearly':'Anual','ret.keep':'retener {n}','ret.have':'{h} de {n} períodos cubiertos','ret.nopolicy':'Este pivot no tiene GFS configurado ni puntos GFS. Los restore points siguen la retención simple del job (días o cantidad).','ret.nopoints':'Política configurada pero todavía no hay puntos GFS (el primero se crea en el próximo full del período).','ret.soon':'{n} punto(s) GFS vencen en los próximos 30 días','ret.missing':'Falta GFS en: {p}','ret.complete':'Todos los períodos esperados tienen su punto GFS','ret.col.period':'Período','ret.col.date':'Creado','ret.col.wl':'Workload','ret.col.size':'En disco','ret.col.repo':'Repositorio','ret.col.exp':'Vence','ret.days':'{d} d','ret.expired':'vencido','ret.noexp':'sin política','ret.note':'El vencimiento se estima con la política GFS del job (creación + retención del nivel); la API no expone la fecha real. Los períodos esperados/faltantes se calculan solo en el pivot Job.','ret.loading':'Leyendo toda la historia del pivot…',
     'range.all':'Todo','tl.cluster':'{n} puntos el mismo día · clic para ver el más reciente',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Backup de plug-in (RMAN / backint / SQL / MongoDB): VBR expone los archivos, no restore points. Qué pieza es full, incremental o archive log lo sabe el catálogo de la aplicación, no la API.',
@@ -402,6 +405,7 @@ const I18N = {
     'form.host':'VBR host / IP','form.port':'Port','form.user':'Username','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negotiates the highest)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repository','rail.search':'Search…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositories','rail.of':'{n} of {t}',
     'mode.type':'Type','mode.eff':'Efficiency','mode.app':'Application',
+    'tl.gapcol':'+{n} d',
     'mode.ret':'Retention','ret.title':'GFS retention','ret.weekly':'Weekly','ret.monthly':'Monthly','ret.quarterly':'Quarterly','ret.yearly':'Yearly','ret.keep':'keep {n}','ret.have':'{h} of {n} periods covered','ret.nopolicy':'This pivot has no GFS policy and no GFS points. Restore points follow the job\'s simple retention (days or count).','ret.nopoints':'Policy configured but no GFS points yet (the first one is created on the next full of the period).','ret.soon':'{n} GFS point(s) expire within 30 days','ret.missing':'GFS missing for: {p}','ret.complete':'Every expected period has its GFS point','ret.col.period':'Period','ret.col.date':'Created','ret.col.wl':'Workload','ret.col.size':'On disk','ret.col.repo':'Repository','ret.col.exp':'Expires','ret.days':'{d} d','ret.expired':'expired','ret.noexp':'no policy','ret.note':'Expiry is estimated from the job GFS policy (creation + tier retention); the API does not expose the real date. Expected/missing periods are computed for the Job pivot only.','ret.loading':'Reading the whole history of this pivot…',
     'range.all':'All','tl.cluster':'{n} points on the same day · click for the latest',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Plug-in backup (RMAN / backint / SQL / MongoDB): VBR exposes backup files, not restore points. Which piece is a full, an incremental or an archive log is known to the application catalog, not to the API.',
@@ -441,6 +445,7 @@ const I18N = {
     'form.host':'Host / IP do VBR','form.port':'Porta','form.user':'Usuário','form.pass':'Senha','form.apiver':'Versão da API','conn.apiauto':'auto (negocia a mais alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositório','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositórios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiência','mode.app':'Aplicação',
+    'tl.gapcol':'+{n} d',
     'mode.ret':'Retenção','ret.title':'Retenção GFS','ret.weekly':'Semanal','ret.monthly':'Mensal','ret.quarterly':'Trimestral','ret.yearly':'Anual','ret.keep':'reter {n}','ret.have':'{h} de {n} períodos cobertos','ret.nopolicy':'Este pivot não tem GFS configurado nem pontos GFS. Os restore points seguem a retenção simples do job (dias ou quantidade).','ret.nopoints':'Política configurada mas ainda sem pontos GFS (o primeiro é criado no próximo full do período).','ret.soon':'{n} ponto(s) GFS vencem nos próximos 30 dias','ret.missing':'Falta GFS em: {p}','ret.complete':'Todos os períodos esperados têm seu ponto GFS','ret.col.period':'Período','ret.col.date':'Criado','ret.col.wl':'Workload','ret.col.size':'Em disco','ret.col.repo':'Repositório','ret.col.exp':'Vence','ret.days':'{d} d','ret.expired':'vencido','ret.noexp':'sem política','ret.note':'O vencimento é estimado pela política GFS do job (criação + retenção do nível); a API não expõe a data real. Períodos esperados/faltantes só são calculados no pivot Job.','ret.loading':'Lendo todo o histórico deste pivot…',
     'range.all':'Tudo','tl.cluster':'{n} pontos no mesmo dia · clique para ver o mais recente',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Backup de plug-in (RMAN / backint / SQL / MongoDB): o VBR expõe os arquivos, não restore points. Qual peça é full, incremental ou archive log só o catálogo da aplicação sabe, não a API.',
@@ -707,11 +712,28 @@ function renderTimeline(loading) {
   if (!S.inv) return;
   const L = lanes(), rps = S.rps;
   const start = new Date(TODAY); start.setHours(0,0,0,0); start.setDate(start.getDate() - S.days + 1);
-  // los dias ocupan todo el ancho disponible (menos la columna de etiquetas); si no
-  // entran a MIN_PX por dia, aparece el scroll horizontal
+  const dayIdx = v => Math.floor((v - start) / DAY);
+  // Geometria. Hasta 90 dias: una columna por dia calendario. 1y / Todo: eje COMPACTO,
+  // solo los dias que tienen restore points (+ hoy); entre dias no consecutivos va una
+  // columna angosta "+n d" que representa el hueco sin estirar la barra.
+  const compact = S.days > 120;
+  let cols = [];                       // {day:int, gap?:int}
+  const colOf = new Map();             // dayIdx -> indice de columna
+  if (!compact) {
+    for (let i = 0; i <= S.days; i++) { colOf.set(i, cols.length); cols.push({ day:i }); }
+  } else {
+    const set = new Set(L.lanes.flatMap(l => l.pts.map(r => dayIdx(d(r.date)))));
+    set.add(dayIdx(TODAY));
+    const days = [...set].sort((a, b) => a - b);
+    days.forEach((dd, i) => {
+      if (i > 0 && dd - days[i-1] > 1) cols.push({ gap: dd - days[i-1] - 1 });
+      colOf.set(dd, cols.length); cols.push({ day:dd });
+    });
+  }
   const avail = ($('scroll').clientWidth || 1200) - 250 - 2;
-  PX = Math.max(MIN_PX, Math.floor(avail / (S.days + 1)));
-  const width = (S.days + 1) * PX, x = v => ((v - start) / DAY) * PX;
+  PX = Math.min(90, Math.max(MIN_PX, Math.floor(avail / cols.length)));
+  const width = cols.length * PX;
+  const x = v => { const di = dayIdx(v); const c = colOf.get(di); if (c === undefined) return -9999; return c * PX + ((v - start) / DAY - di) * PX; };
   const all = L.lanes.flatMap(l => l.pts);
   const gapsAll = L.lanes.flatMap(l => gapsFor(l.pts, l.rpo || L.rpo));
   const fulls = all.filter(r => r.type === 'full' || r.type === 'synth' || r.type === 'tape').length;
@@ -741,22 +763,24 @@ function renderTimeline(loading) {
 
   const selJob = S.pivot === 'job' && byId(S.inv.jobs, S.selectedId);
   if (!L.lanes.length) { const emptyInv = !S.inv.jobs.length && !S.inv.vms.length; $('tl').innerHTML = `<div class="empty-tl" style="grid-column:1/-1">${emptyInv ? t('inv.empty') : selJob && selJob.noChain ? t('tl.nochain') : S.selectedId ? (loading ? '…' : t('tl.empty')) : t('tl.nolist')}</div>`; return; }
-  // rangos largos (1 ano / todo): solo se dibujan celdas en el eje y con etiqueta cada
-  // semana (o cada mes), y los carriles no llevan celdas por dia (DOM liviano)
-  const longRange = S.days > 120, everyN = S.days > 400 ? 7 : longRange ? 2 : 1;
-  const dayCells = withText => { if (!withText && longRange) return ''; let s = ''; for (let i = 0; i <= S.days; i++) { const v = new Date(start.getTime() + i * DAY); const wk = v.getDay() === 0 || v.getDay() === 6, first = i === 0 || v.getDate() === 1, today = v.toDateString() === TODAY.toDateString(); if (longRange && !first && !today && i % everyN) continue; s += `<div class="day ${wk && !longRange ? 'wk' : ''} ${first ? 'm' : ''} ${today ? 'today' : ''}" style="left:${i * PX}px;width:${PX * (longRange ? everyN : 1)}px">${withText ? (first ? `<b>${v.toLocaleDateString(LOCALE[LANG], { month:'short', year: S.days > 400 ? '2-digit' : undefined })}</b>` : '') + (today ? '●' : (longRange && !first ? '' : v.getDate())) : ''}</div>`; } return s; };
+  const dayCells = withText => { let out = ''; cols.forEach((c, ci) => {
+      if (c.gap !== undefined) { out += `<div class="day gapcol" style="left:${ci * PX}px;width:${PX}px" title="${attrTxt(tp('tl.gapcol',{n:c.gap}))}">${withText ? tp('tl.gapcol',{n:c.gap}) : ''}</div>`; return; }
+      const v = new Date(start.getTime() + c.day * DAY); const wk = v.getDay() === 0 || v.getDay() === 6, today = v.toDateString() === TODAY.toDateString();
+      const prev = cols[ci-1]; const first = ci === 0 || (!compact && v.getDate() === 1) || (compact && (prev === undefined || prev.gap !== undefined || new Date(start.getTime() + prev.day * DAY).getMonth() !== v.getMonth()));
+      out += `<div class="day ${wk && !compact ? 'wk' : ''} ${first ? 'm' : ''} ${today ? 'today' : ''}" style="left:${ci * PX}px;width:${PX}px">${withText ? (first ? `<b>${v.toLocaleDateString(LOCALE[LANG], { month:'short', year: compact ? '2-digit' : undefined })}</b>` : '') + (today ? '●' : v.getDate()) : ''}</div>`;
+    }); return out; };
   let h = `<div class="axis lbl">${tp('k.lanes',{n:L.lanes.length})}</div><div class="axis"><div class="days" style="width:${width}px">${dayCells(true)}</div></div>`;
   L.lanes.forEach(l => {
     h += `<div class="lbl"><span class="n">${esc(l.n)}${l.app ? `<span class="badge tag">${esc(l.app)}</span>` : ''}</span><span class="s">${esc(l.s)}</span><span class="cnt mono">${l.pts.length}</span></div><div class="lane" style="width:${width}px">${dayCells(false)}`;
     if (S.mode === 'app' && l.logs && l.pts.length) {
-      const first = Math.max(0, Math.min(...l.pts.map(r => x(d(r.date)))));
+      const first = Math.max(0, Math.min(...l.pts.filter(r => x(d(r.date)) >= 0).map(r => x(d(r.date)))));
       h += `<i class="logband" style="left:${first}px;width:${Math.max(0, x(TODAY) - first)}px;background-size:${Math.max(PX * l.logs / 1440, 2)}px 100%" title="${attrTxt(tp('logs.title',{m:l.logs}))}"></i>`;
     }
     gapsFor(l.pts, l.rpo || L.rpo).forEach(([a, b]) => { h += `<div class="gaprect" style="left:${x(a) + 6}px;width:${Math.max(x(b) - x(a) - 12, 6)}px" title="${attrTxt(tp('gap.title',{h:((b - a) / 3600000).toFixed(0)}))}"></div>`; });
     // puntos del mismo dia: se reparten dentro de la celda (min 9 px); si no entran, un
     // chip con la cantidad (clic = el mas reciente; el resto queda en la cadena del detalle)
     const byDay = new Map();
-    l.pts.forEach(r => { const k = Math.floor(x(d(r.date)) / PX); (byDay.get(k) || byDay.set(k, []).get(k)).push(r); });
+    l.pts.forEach(r => { const xx = x(d(r.date)); if (xx < 0) return; const k = Math.floor(xx / PX); (byDay.get(k) || byDay.set(k, []).get(k)).push(r); });
     const placed = new Map();
     byDay.forEach((pts, k) => {
       pts.sort((a, b) => d(a.date) - d(b.date));
