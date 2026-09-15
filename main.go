@@ -24,7 +24,7 @@ import (
 )
 
 // version del binario (se muestra en el banner de arranque y se etiqueta en el release).
-const version = "0.1.5-alpha"
+const version = "0.1.6-alpha"
 
 func main() {
 	// 8001 para poder correr al lado de Yoga Benchmark (8000) en la misma maquina.
