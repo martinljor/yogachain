@@ -55,8 +55,8 @@
   .ro { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:3px 9px; white-space:nowrap; }
 
   /* --- layout --- */
-  .app { display:grid; grid-template-columns:270px 1fr 330px; height:calc(100vh - 52px); }
-  @media (max-width:1150px){ .app { grid-template-columns:240px 1fr; } .detail { display:none; } }
+  .app { display:grid; grid-template-columns:270px 1fr; height:calc(100vh - 52px); }
+  @media (max-width:900px){ .app { grid-template-columns:220px 1fr; } }
 
   /* --- conexion (card en el main cuando no hay sesion) --- */
   .connect-card { max-width:760px; margin:40px auto; }
@@ -130,7 +130,7 @@
   .sw.aafail { background:var(--bad-soft); border:2px dashed var(--red); }
   .sw.logs { width:1px; height:10px; background:var(--green); border-radius:0; }
 
-  .tl-wrap { flex:1; margin:0 18px 18px; background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
+  .tl-wrap { flex:1; margin:0 18px 12px; background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; min-height:140px; }
   .tl-scroll { overflow:auto; flex:1; }
   .tl { display:grid; grid-template-columns:250px max-content; }
   .lbl { position:sticky; left:0; z-index:2; background:var(--panel); border-right:1px solid var(--border); padding:0 14px; display:flex; flex-direction:column; justify-content:center; gap:1px; border-bottom:1px solid var(--border); }
@@ -186,11 +186,16 @@
   .loadcard .pct { font-size:26px; font-weight:600; }
   .main { position:relative; }
 
-  /* --- detalle --- */
-  .detail { background:var(--sidebar); border-left:1px solid var(--border); display:flex; flex-direction:column; min-height:0; overflow:auto; }
-  .detail .empty { padding:40px 24px; color:var(--muted); text-align:center; font-size:13px; line-height:1.5; }
-  .detail .empty svg { width:40px; height:40px; stroke:var(--border); fill:none; stroke-width:1.5; margin-bottom:10px; }
-  .dh { padding:16px 18px 12px; border-bottom:1px solid var(--border); }
+  /* --- detalle: panel inferior (como el panel de detalle de la consola de VBR) --- */
+  .detail { background:var(--sidebar); border-top:1px solid var(--border); min-height:0; overflow:auto; flex:0 0 auto; max-height:46%; }
+  .detail.empty-pane { max-height:none; flex:0 0 auto; }
+  .detail .empty { padding:14px 24px; color:var(--muted); text-align:center; font-size:13px; line-height:1.5; display:flex; align-items:center; justify-content:center; gap:12px; }
+  .detail .empty svg { width:22px; height:22px; stroke:var(--border); fill:none; stroke-width:1.5; flex:none; }
+  .detail .empty br { display:none; }
+  .dgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(290px, 1fr)); align-items:start; }
+  .dgrid > * { border-right:1px solid var(--border); border-bottom:0 !important; min-height:100%; }
+  .dgrid > *:last-child { border-right:0; }
+  .dh { padding:14px 18px 12px; }
   .eyebrow, .dsec h4, .actions h4 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0; }
   .dh h2 { margin:4px 0 8px; font-size:16px; font-weight:600; line-height:1.3; }
   .dim { color:var(--muted); font-weight:400; }
@@ -200,9 +205,9 @@
   .pill.gfs { background:var(--warn-soft); color:var(--amber); }
   .pill.ok { background:var(--ok-soft); color:var(--green); }
   .pill.bad { background:var(--bad-soft); color:var(--red); }
-  .kv { padding:12px 18px; margin:0; display:grid; grid-template-columns:auto 1fr; gap:7px 14px; font-size:13px; border-bottom:1px solid var(--border); }
+  .kv { padding:12px 18px; margin:0; display:grid; grid-template-columns:auto 1fr; gap:7px 14px; font-size:13px; }
   .kv dt { color:var(--muted); } .kv dd { margin:0; overflow-wrap:anywhere; }
-  .dsec { padding:12px 18px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:8px; }
+  .dsec { padding:12px 18px; display:flex; flex-direction:column; gap:8px; }
   .chain { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
   .chain .c { width:16px; height:16px; border-radius:3px; background:var(--inc); opacity:.6; }
   .chain .c.full { background:var(--full); opacity:1; }
@@ -318,9 +323,8 @@
     </div>
     <div class="progress" id="tlProgress" style="display:none"><i></i></div>
     <div class="tl-wrap"><div class="tl-scroll" id="scroll"><div class="tl" id="tl"></div></div></div>
+    <section class="detail empty-pane" id="detail"></section>
   </main>
-
-  <aside class="detail" id="detail"></aside>
 </div>
 <div class="tip" id="tip"></div>
 
@@ -483,7 +487,8 @@ async function getJSON(url, opts) {
 }
 const postJSON = (url, body) => getJSON(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : null });
 const $ = id => document.getElementById(id);
-const DAY = 86400000, PX = 36;
+const DAY = 86400000, MIN_PX = 22;
+let PX = 36;
 let TODAY = new Date();
 const d = s => new Date(s);
 const p = n => String(n).padStart(2, '0');
@@ -669,6 +674,10 @@ function renderTimeline(loading) {
   if (!S.inv) return;
   const L = lanes(), rps = S.rps;
   const start = new Date(TODAY); start.setHours(0,0,0,0); start.setDate(start.getDate() - S.days + 1);
+  // los dias ocupan todo el ancho disponible (menos la columna de etiquetas); si no
+  // entran a MIN_PX por dia, aparece el scroll horizontal
+  const avail = ($('scroll').clientWidth || 1200) - 250 - 2;
+  PX = Math.max(MIN_PX, Math.floor(avail / (S.days + 1)));
   const width = (S.days + 1) * PX, x = v => ((v - start) / DAY) * PX;
   const all = L.lanes.flatMap(l => l.pts);
   const gapsAll = L.lanes.flatMap(l => gapsFor(l.pts, l.rpo || L.rpo));
@@ -740,6 +749,7 @@ const ICON_OK = '<svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>', ICO
 
 function renderDetail() {
   const el = $('detail'); if (!el) return;
+  el.classList.toggle('empty-pane', !S.selectedRp || !S.detail || !!S.detail.error);
   if (!S.selectedRp) { el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg><br>${t('d.empty')}</div>`; return; }
   if (!S.detail) { el.innerHTML = `<div class="empty">${t('d.loading')}</div>`; return; }
   if (S.detail.error) { el.innerHTML = `<div class="empty">${tp('d.error',{e:esc(S.detail.error)})}</div>`; return; }
@@ -748,7 +758,7 @@ function renderDetail() {
   const swCls = tt => tt === 'copy' ? 'copy' : tt === 'tape' ? 'tape' : 'full';
   const locs = [{ repo, when:r.date, type:r.type, here:true }, ...(locations||[]).map(o => ({ repo: repoOf(o) || { name:o.repoId }, when:o.date, type:o.type }))];
   const isFull = r.full && r.type !== 'copy' && !r.fromFile;
-  el.innerHTML = `
+  el.innerHTML = `<div class="dgrid"><div>
   <div class="dh"><div class="eyebrow">${t('d.rp')} · ${label(r)}</div><h2>${esc(vm.name)} <span class="dim">·</span> ${fmtDT(r.date)}</h2>
     <div class="pills">${isFull ? '<span class="pill full">Full</span>' : ''}${r.gfs ? `<span class="pill gfs">GFS ${esc(r.gfs)}</span>` : ''}${r.immUntil && d(r.immUntil) > TODAY ? `<span class="pill ok">${tp('d.imm',{d:fmtD(r.immUntil)})}</span>` : `<span class="pill">${t('d.noimm')}</span>`}${r.mal !== 'Clean' ? `<span class="pill bad">${t('d.malbad')}</span>` : `<span class="pill ok">${t('d.malok')}</span>`}</div></div>
   <dl class="kv">
@@ -758,7 +768,7 @@ function renderDetail() {
     <dt>${t('d.platform')}</dt><dd>${esc(r.platform || vm.platform || '—')}${(vm.os || r.guestOs) ? ' · ' + esc(vm.os || r.guestOs) : ''}</dd>
     <dt>restorePointId</dt><dd class="mono" style="font-size:12px">${esc(r.id)}</dd>
     <dt>backupFileId</dt><dd class="mono" style="font-size:12px">${esc(r.backupFileId || '—')}</dd>
-  </dl>
+  </dl></div><div>
   <div class="dsec"><h4>${t('d.eff')}</h4>
     <div class="effbar">
       <div class="row"><span class="k">${t('d.origin')}</span><span class="bar"><i style="width:100%"></i></span><span class="mono">${fmtSize(r.dataSize)}</span></div>
@@ -768,13 +778,13 @@ function renderDetail() {
     <div class="note">${r.type === 'tape' ? t('d.eff.tape') : r.compressRatio && r.compressRatio < 1.6 ? t('d.eff.low') : t('d.eff.src')}</div>
   </div>
   <div class="dsec"><h4>${tp('d.chain',{n:chain.length})}</h4><div class="chain">${chain.map((c, i) => `${i ? '<span class="arrow">›</span>' : ''}<span class="c ${c.full ? 'full' : ''} ${c.id === r.id ? 'here' : ''}" title="${attrTxt(label(c) + ' ' + fmtDT(c.date))}"></span>`).join('')}</div>
-    <div class="note">${tp('d.needed',{f:needed.files, s:fmtSize(needed.sizeGB)})}</div></div>
+    <div class="note">${tp('d.needed',{f:needed.files, s:fmtSize(needed.sizeGB)})}</div></div></div><div>
   <div class="dsec"><h4>${t('d.where')}</h4><div class="loc">${locs.map(l => `<div><i class="sw ${swCls(l.type)}"></i><span>${esc(l.repo.name)}${l.here ? ` <span class="dim">${t('d.this')}</span>` : ''}</span><span class="when mono">${fmtDT(l.when)}</span></div>`).join('')}</div>
     ${locs.length === 1 ? `<div class="note">${t('d.only1')}</div>` : ''}</div>
-  ${r.fromFile ? `<div class="dsec"><h4>${t('d.aa')}</h4><div class="note">${t('d.file.note')}</div></div>` : aaBlock(r, j, vm)}
+  </div><div>${r.fromFile ? `<div class="dsec"><h4>${t('d.aa')}</h4><div class="note">${t('d.file.note')}</div></div>` : aaBlock(r, j, vm)}
   <div class="actions"><h4>${t('act.title')}</h4>
     ${[['StartViVMInstantRecovery','act.ir'],['StartFlrRestore','act.flr'],['StartEntireVmRestore','act.vm'],['StartDiskPublish','act.disk']].map(([op, k]) => { const ok = (r.allowedOperations||[]).includes(op); return `<button disabled style="${ok ? '' : 'opacity:.45'}">${t(k)} <span>${ok ? t('act.ok') : t('act.no')}</span></button>`; }).join('')}
-    <div class="note">${t('act.note')}</div></div>`;
+    <div class="note">${t('act.note')}</div></div></div></div>`;
 }
 
 function aaBlock(r, j, vm) {
@@ -812,6 +822,10 @@ function aaBlock(r, j, vm) {
     <div class="note">${r.aaipDetail ? tp('aa.src',{t:esc(r.aaipDetail)}) : t('aa.src.none')}</div>
   </div>`;
 }
+
+// re-dibuja la timeline al cambiar el tamano de la ventana (ancho por dia)
+let resizeT = null;
+window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (sessionId && S.inv) renderTimeline(); }, 150); });
 
 // --- boot ---------------------------------------------------------------------
 setLang(LANG);
