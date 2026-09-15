@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -35,13 +36,33 @@ func LoadDetail(ctx context.Context, s *vbr.Session, inv *Inventory, rpID string
 	Aaip(ctx, s, inv, &rp)
 
 	t0, _ := time.Parse(time.RFC3339, rp.Date)
+	// FIELD: el full que abre la cadena puede ser MUY anterior al punto (325 dias en
+	// vbrdb-01: full de octubre + incrementales hoy). Se trae toda la historia del
+	// workload (una llamada paginada por backupObject; la retencion acota el volumen).
+	if rp.VMID == "" {
+		// sin objectIds en el archivo: si el backup tiene un solo objeto, es ese
+		var only string
+		for oid, b := range inv.objectBackup {
+			if b == rp.BackupID {
+				if only != "" && inv.objectVM[oid] != only {
+					only = "?"
+					break
+				}
+				only = inv.objectVM[oid]
+			}
+		}
+		if only != "" && only != "?" {
+			rp.VMID = only
+		}
+	}
 	var sameVM []RestorePoint
 	if rp.VMID != "" {
-		// 45 dias atras alcanza para encontrar el full que abre la cadena  // LAB: GFS largos
-		sameVM, err = RestorePoints(ctx, s, inv, "vm", rp.VMID, t0.AddDate(0, 0, -45))
+		sameVM, err = RestorePoints(ctx, s, inv, "vm", rp.VMID, t0.AddDate(-10, 0, 0))
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		log.Printf("detail: restore point %s has no workload (backupFile.objectIds did not match any backupObject); chain limited to itself", rp.ID)
 	}
 	d := &Detail{RP: rp, Chain: []RestorePoint{rp}, Needed: Needed{1, rp.SizeGB}}
 

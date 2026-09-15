@@ -93,6 +93,11 @@ func TestRestorePointsAndDetail(t *testing.T) {
 	if len(d.Chain) < 2 || !d.Chain[0].Full || d.Needed.Files < 2 {
 		t.Fatalf("cadena mal armada: len=%d needed=%+v", len(d.Chain), d.Needed)
 	}
+	for _, c := range d.Chain[1:] {
+		if c.Full {
+			t.Fatalf("la cadena no debe contener un segundo full: %+v", c)
+		}
+	}
 
 	// pivot repo: el hardened tiene SQL + Oracle
 	byRepo, err := RestorePoints(ctx, s, inv, "repo", "r1", time.Now().AddDate(0, 0, -7))
