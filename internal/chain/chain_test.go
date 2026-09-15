@@ -150,6 +150,21 @@ func TestPluginBackupFromFiles(t *testing.T) {
 	}
 }
 
+func TestAppFromSettings(t *testing.T) {
+	defaults := obj{"sql": obj{"logsProcessing": "Truncate"}, "oracle": obj{"useGuestCredentials": true, "archiveLogs": "Preserve", "backupLogs": false},
+		"postgreSQL": obj{"useGuestCredentials": true, "backupLogs": false}}
+	if got := appFromSettings(defaults); got != "" {
+		t.Fatalf("defaults no deberian detectar app, got %q", got)
+	}
+	pg := obj{"oracle": obj{"useGuestCredentials": true, "archiveLogs": "Preserve", "backupLogs": false}, "postgreSQL": obj{"useGuestCredentials": false, "credentialsId": "x", "backupLogs": false}}
+	if got := appFromSettings(pg); got != "PostgreSQL" {
+		t.Fatalf("PostgreSQL con credenciales propias, got %q", got)
+	}
+	if got := appFromSettings(obj{"sql": obj{"logsProcessing": "Backup", "backupMinsCount": 30}}); got != "SQL" {
+		t.Fatalf("SQL con log backup, got %q", got)
+	}
+}
+
 func TestRatioSemantics(t *testing.T) {
 	// FIELD: 65 % restante -> 1.54x; 25 % -> 4x; 0 -> sin dato -> 1x
 	for v, want := range map[float64]float64{65: 100.0 / 65, 25: 4, 100: 1, 0: 1} {

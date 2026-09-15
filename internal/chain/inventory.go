@@ -193,11 +193,8 @@ func buildInventory(ctx context.Context, s *vbr.Session) (*Inventory, error) {
 		}
 		for _, a := range arr(sub(sub(full, "guestProcessing"), "appAwareProcessing"), "appSettings") {
 			as, _ := a.(map[string]any)
-			name := str(sub(as, "vmObject"), "name")
-			for key, app := range map[string]string{"sql": "SQL", "oracle": "Oracle", "postgreSQL": "PostgreSQL"} {
-				if as[key] != nil && name != "" {
-					apps[name] = app
-				}
+			if name, app := str(sub(as, "vmObject"), "name"), appFromSettings(as); name != "" && app != "" {
+				apps[name] = app
 			}
 		}
 		inv.Jobs = append(inv.Jobs, job)
@@ -362,6 +359,26 @@ func listJobs(ctx context.Context, s *vbr.Session) ([]obj, string) {
 		}
 	}
 	return out, "backups"
+}
+
+// appFromSettings: que aplicacion protege realmente un appSettings. FIELD: VBR
+// devuelve los bloques sql/oracle/postgreSQL en TODOS los jobs con AAIP, con sus
+// valores por defecto (sql.logsProcessing=Truncate, oracle.archiveLogs=Preserve,
+// useGuestCredentials=true, backupLogs=false). Solo cuenta lo que se aparta del
+// default; si nada se aparta, no hay app detectada (una VM PostgreSQL salia como
+// "Oracle detected").
+func appFromSettings(as obj) string {
+	if o := sub(as, "oracle"); o != nil && (boolean(o, "backupLogs") || (o["useGuestCredentials"] != nil && !boolean(o, "useGuestCredentials")) ||
+		(str(o, "archiveLogs") != "" && str(o, "archiveLogs") != "Preserve")) {
+		return "Oracle"
+	}
+	if q := sub(as, "sql"); q != nil && (str(q, "logsProcessing") == "Backup" || str(q, "logsProcessing") == "NeverTruncate") {
+		return "SQL"
+	}
+	if pg := sub(as, "postgreSQL"); pg != nil && (boolean(pg, "backupLogs") || (pg["useGuestCredentials"] != nil && !boolean(pg, "useGuestCredentials"))) {
+		return "PostgreSQL"
+	}
+	return ""
 }
 
 func dbgClip(v string, n int) string {

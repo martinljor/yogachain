@@ -157,6 +157,8 @@
   .rp.copy { background:var(--copy); border-radius:50%; width:11px; height:11px; }
   .rp.copy.full { width:14px; height:14px; }
   .rp.tape { background:none; border:2px solid var(--copy); border-radius:50%; width:11px; height:11px; }
+  .cluster { position:absolute; top:50%; transform:translate(-50%,-50%); min-width:18px; height:16px; padding:0 5px; border-radius:8px; background:var(--panel2); border:1px solid var(--muted); color:var(--text); font-size:10.5px; font-weight:600; line-height:14px; text-align:center; cursor:pointer; }
+  .cluster:hover { border-color:var(--green); background:var(--ok-soft); color:var(--green); }
   .rp.file { background:var(--amber); border-radius:2px; width:10px; height:10px; transform:translate(-50%,-50%) rotate(45deg); }
   .rp.file:hover { transform:translate(-50%,-50%) rotate(45deg) scale(1.35); }
   .sw.file { background:var(--amber); width:9px; height:9px; transform:rotate(45deg); border-radius:2px; }
@@ -304,7 +306,7 @@
     </div>
     <div class="legend">
       <span class="modes" role="group"><button class="on" data-mode="type" data-i18n="mode.type">Tipo</button><button data-mode="eff" data-i18n="mode.eff">Eficiencia</button><button data-mode="app" data-i18n="mode.app">Aplicación</button></span>
-      <span class="modes" role="group" style="margin-left:4px"><button data-days="14">14d</button><button data-days="30" class="on">30d</button><button data-days="60">60d</button><button data-days="90">90d</button></span>
+      <span class="modes" role="group" style="margin-left:4px"><button data-days="14">14d</button><button data-days="30" class="on">30d</button><button data-days="90">90d</button><button data-days="365">1y</button><button data-days="3650" data-i18n="range.all">Todo</button></span>
       <span class="sep"></span>
       <span><i class="sw full"></i><span data-i18n="lg.full">Full activo</span></span>
       <span><i class="sw synth"></i><span data-i18n="lg.synth">Full sintético</span></span>
@@ -346,6 +348,7 @@ const I18N = {
     'form.host':'Host / IP del VBR','form.port':'Puerto','form.user':'Usuario','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negocia la más alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositorio','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositorios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiencia','mode.app':'Aplicación',
+    'range.all':'Todo','tl.cluster':'{n} puntos el mismo día · clic para ver el más reciente',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Backup de plug-in (RMAN / backint / SQL / MongoDB): VBR expone los archivos, no restore points. Qué pieza es full, incremental o archive log lo sabe el catálogo de la aplicación, no la API.',
     'load.hint':'Leyendo repositorios, jobs, backups y objetos desde la REST API. En un VBR cargado /jobs puede tardar más de un minuto.','load.repos':'Repositorios','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads por backup','load.done':'Listo','load.error':'Error','job.detailerr':'VBR no pudo describir este job por REST (se muestra con datos básicos):','job.frombackup':'Job tomado de /backups: no aparece en la lista de jobs (política de plug-in, AHV o backup importado).','inv.empty':'Este VBR no expone jobs ni backups por REST (¿solo políticas CDP o réplicas?). CDP y réplicas llegan en la fase 3.',
     'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup a cinta','kind.filetape':'Archivos a cinta','kind.agent':'Backup de agente','kind.nas':'Backup de file share','kind.obj':'Backup de object storage','kind.entra':'Backup de Entra ID','kind.replica':'Réplica (sin cadena de backup)','kind.sure':'SureBackup (sin cadena de backup)','tl.nochain':'Este job no genera restore points de backup (réplica / SureBackup). Las réplicas llegan en la fase 3.',
@@ -383,6 +386,7 @@ const I18N = {
     'form.host':'VBR host / IP','form.port':'Port','form.user':'Username','form.pass':'Password','form.apiver':'API version','conn.apiauto':'auto (negotiates the highest)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repository','rail.search':'Search…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositories','rail.of':'{n} of {t}',
     'mode.type':'Type','mode.eff':'Efficiency','mode.app':'Application',
+    'range.all':'All','tl.cluster':'{n} points on the same day · click for the latest',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Plug-in backup (RMAN / backint / SQL / MongoDB): VBR exposes backup files, not restore points. Which piece is a full, an incremental or an archive log is known to the application catalog, not to the API.',
     'load.hint':'Reading repositories, jobs, backups and objects from the REST API. On a loaded VBR /jobs can take over a minute.','load.repos':'Repositories','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads per backup','load.done':'Done','load.error':'Error','job.detailerr':'VBR could not describe this job over REST (shown with basic data):','job.frombackup':'Job taken from /backups: it is not in the job list (plug-in policy, AHV or imported backup).','inv.empty':'This VBR exposes no jobs or backups over REST (CDP policies or replicas only?). CDP and replicas arrive in phase 3.',
     'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup to tape','kind.filetape':'File to tape','kind.agent':'Agent backup','kind.nas':'File share backup','kind.obj':'Object storage backup','kind.entra':'Entra ID backup','kind.replica':'Replica (no backup chain)','kind.sure':'SureBackup (no backup chain)','tl.nochain':'This job produces no backup restore points (replica / SureBackup). Replicas arrive in phase 3.',
@@ -420,6 +424,7 @@ const I18N = {
     'form.host':'Host / IP do VBR','form.port':'Porta','form.user':'Usuário','form.pass':'Senha','form.apiver':'Versão da API','conn.apiauto':'auto (negocia a mais alta)',
     'pivot.job':'Job','pivot.vm':'Workload','pivot.repo':'Repositório','rail.search':'Buscar…','rail.jobs':'Jobs','rail.vms':'Workloads','rail.repos':'Repositórios','rail.of':'{n} de {t}',
     'mode.type':'Tipo','mode.eff':'Eficiência','mode.app':'Aplicação',
+    'range.all':'Tudo','tl.cluster':'{n} pontos no mesmo dia · clique para ver o mais recente',
     't.file':'Backup piece (plug-in)','lg.file':'Backup piece (plug-in)','d.file.note':'Backup de plug-in (RMAN / backint / SQL / MongoDB): o VBR expõe os arquivos, não restore points. Qual peça é full, incremental ou archive log só o catálogo da aplicação sabe, não a API.',
     'load.hint':'Lendo repositórios, jobs, backups e objetos da REST API. Em um VBR carregado /jobs pode levar mais de um minuto.','load.repos':'Repositórios','load.jobs':'Jobs','load.backups':'Backups','load.objects':'Workloads por backup','load.done':'Pronto','load.error':'Erro','job.detailerr':'O VBR não conseguiu descrever este job via REST (exibido com dados básicos):','job.frombackup':'Job obtido de /backups: não aparece na lista de jobs (política de plug-in, AHV ou backup importado).','inv.empty':'Este VBR não expõe jobs nem backups via REST (apenas políticas CDP ou réplicas?). CDP e réplicas chegam na fase 3.',
     'kind.backup':'Backup','kind.copy':'Backup copy','kind.tape':'Backup em fita','kind.filetape':'Arquivos em fita','kind.agent':'Backup de agente','kind.nas':'Backup de file share','kind.obj':'Backup de object storage','kind.entra':'Backup do Entra ID','kind.replica':'Réplica (sem cadeia de backup)','kind.sure':'SureBackup (sem cadeia de backup)','tl.nochain':'Este job não gera restore points de backup (réplica / SureBackup). Réplicas chegam na fase 3.',
@@ -708,7 +713,10 @@ function renderTimeline(loading) {
 
   const selJob = S.pivot === 'job' && byId(S.inv.jobs, S.selectedId);
   if (!L.lanes.length) { const emptyInv = !S.inv.jobs.length && !S.inv.vms.length; $('tl').innerHTML = `<div class="empty-tl" style="grid-column:1/-1">${emptyInv ? t('inv.empty') : selJob && selJob.noChain ? t('tl.nochain') : S.selectedId ? (loading ? '…' : t('tl.empty')) : t('tl.nolist')}</div>`; return; }
-  const dayCells = withText => { let s = ''; for (let i = 0; i <= S.days; i++) { const v = new Date(start.getTime() + i * DAY); const wk = v.getDay() === 0 || v.getDay() === 6, first = i === 0 || v.getDate() === 1, today = v.toDateString() === TODAY.toDateString(); s += `<div class="day ${wk ? 'wk' : ''} ${first ? 'm' : ''} ${today ? 'today' : ''}" style="left:${i * PX}px;width:${PX}px">${withText ? (first ? `<b>${v.toLocaleDateString(LOCALE[LANG], { month:'short' })}</b>` : '') + (today ? '●' : v.getDate()) : ''}</div>`; } return s; };
+  // rangos largos (1 ano / todo): solo se dibujan celdas en el eje y con etiqueta cada
+  // semana (o cada mes), y los carriles no llevan celdas por dia (DOM liviano)
+  const longRange = S.days > 120, everyN = S.days > 400 ? 7 : longRange ? 2 : 1;
+  const dayCells = withText => { if (!withText && longRange) return ''; let s = ''; for (let i = 0; i <= S.days; i++) { const v = new Date(start.getTime() + i * DAY); const wk = v.getDay() === 0 || v.getDay() === 6, first = i === 0 || v.getDate() === 1, today = v.toDateString() === TODAY.toDateString(); if (longRange && !first && !today && i % everyN) continue; s += `<div class="day ${wk && !longRange ? 'wk' : ''} ${first ? 'm' : ''} ${today ? 'today' : ''}" style="left:${i * PX}px;width:${PX * (longRange ? everyN : 1)}px">${withText ? (first ? `<b>${v.toLocaleDateString(LOCALE[LANG], { month:'short', year: S.days > 400 ? '2-digit' : undefined })}</b>` : '') + (today ? '●' : (longRange && !first ? '' : v.getDate())) : ''}</div>`; } return s; };
   let h = `<div class="axis lbl">${tp('k.lanes',{n:L.lanes.length})}</div><div class="axis"><div class="days" style="width:${width}px">${dayCells(true)}</div></div>`;
   L.lanes.forEach(l => {
     h += `<div class="lbl"><span class="n">${esc(l.n)}${l.app ? `<span class="badge tag">${esc(l.app)}</span>` : ''}</span><span class="s">${esc(l.s)}</span><span class="cnt mono">${l.pts.length}</span></div><div class="lane" style="width:${width}px">${dayCells(false)}`;
@@ -717,17 +725,32 @@ function renderTimeline(loading) {
       h += `<i class="logband" style="left:${first}px;width:${Math.max(0, x(TODAY) - first)}px;background-size:${Math.max(PX * l.logs / 1440, 2)}px 100%" title="${attrTxt(tp('logs.title',{m:l.logs}))}"></i>`;
     }
     gapsFor(l.pts, l.rpo || L.rpo).forEach(([a, b]) => { h += `<div class="gaprect" style="left:${x(a) + 6}px;width:${Math.max(x(b) - x(a) - 12, 6)}px" title="${attrTxt(tp('gap.title',{h:((b - a) / 3600000).toFixed(0)}))}"></div>`; });
+    // puntos del mismo dia: se reparten dentro de la celda (min 9 px); si no entran, un
+    // chip con la cantidad (clic = el mas reciente; el resto queda en la cadena del detalle)
+    const byDay = new Map();
+    l.pts.forEach(r => { const k = Math.floor(x(d(r.date)) / PX); (byDay.get(k) || byDay.set(k, []).get(k)).push(r); });
+    const placed = new Map();
+    byDay.forEach((pts, k) => {
+      pts.sort((a, b) => d(a.date) - d(b.date));
+      if (pts.length === 1) { placed.set(pts[0].id, x(d(pts[0].date))); return; }
+      const slot = PX / pts.length;
+      if (slot >= 9) { pts.forEach((r, i) => placed.set(r.id, k * PX + slot * (i + 0.5))); return; }
+      const last = pts[pts.length - 1];
+      h += `<button class="cluster" data-rp="${esc(last.id)}" style="left:${k * PX + PX / 2}px" title="${attrTxt(tp('tl.cluster',{n:pts.length}))}">${pts.length}</button>`;
+    });
     l.pts.forEach(r => {
+      if (!placed.has(r.id)) return;
       const aaCls = S.mode === 'app' && r.aaip ? 'aa aa-' + r.aaip : '';
       const cls = [r.type, r.full && r.type === 'copy' ? 'full' : '', r.gfs && r.type !== 'tape' ? 'gfs' : '', r.mal !== 'Clean' ? 'mal' : '', r.immUntil && d(r.immUntil) > TODAY ? 'imm' : '', S.selectedRp === r.id ? 'sel' : '', S.mode === 'eff' ? 'eff' : '', aaCls].join(' ');
       const effStyle = S.mode === 'eff' && r.mal === 'Clean' && r.sizeGB ? `background:${effColor(r)};` : '';
-      h += `<button class="rp ${cls}" data-rp="${esc(r.id)}" style="left:${x(d(r.date))}px;${effStyle}" aria-label="${esc(l.n)} ${fmtDT(r.date)}"></button>`;
+      h += `<button class="rp ${cls}" data-rp="${esc(r.id)}" style="left:${placed.get(r.id)}px;${effStyle}" aria-label="${esc(l.n)} ${fmtDT(r.date)}"></button>`;
     });
     h += `</div>`;
   });
   const sc = $('scroll'), keep = sc.scrollLeft;
   $('tl').innerHTML = h;
   const tip = $('tip');
+  $('tl').querySelectorAll('.cluster').forEach(b => b.addEventListener('click', () => selectRp(b.dataset.rp)));
   $('tl').querySelectorAll('.rp').forEach(b => {
     b.addEventListener('click', () => selectRp(b.dataset.rp));
     b.addEventListener('mouseenter', e => { const r = byId(rps, b.dataset.rp); if (!r) return; const vm = vmOf(r) || {}; tip.innerHTML = `<b>${esc(vm.name || r.vmId)}</b> · ${label(r)}${r.gfs ? ' · GFS ' + esc(r.gfs) : ''}<br>${fmtDT(r.date)} · ${fmtSize(r.dataSize)} → ${fmtSize(r.sizeGB)}${r.sizeGB ? ` (${(r.dataSize / r.sizeGB).toFixed(1)}×)` : ''}${r.mal !== 'Clean' ? ' · <span class="warnt">malware</span>' : ''}`; tip.classList.add('show'); moveTip(e); });
